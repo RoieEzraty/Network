@@ -12,7 +12,6 @@ def buildNetwork(EIEJ_plots):
     # for i, edge in enumerate(EI):
     #     NET.add_edge(EI[i], EJ[i])
     NET.add_edges_from(EIEJ_plots)
-    print(NET.edges)
     return NET
 
  
@@ -102,7 +101,7 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE):
     # separate calls to draw nodes and edges
     # pos = nx.spring_layout(G)
     nx.draw_networkx_nodes(NET, pos_lattice, cmap=plt.get_cmap('cool'), 
-                           node_color = values, node_size = 500)
+                           node_color = values, node_size = 300)
     nx.draw_networkx_labels(NET, pos_lattice)
 #     nx.draw_networkx_edges(NET, pos_lattice, edgelist=red_edges, edge_color='r', arrows=True, width=edgewidths_r, arrowstyle=arrowlst)
 #     nx.draw_networkx_edges(NET, pos_lattice, edgelist=black_edges, arrows=True, width=edgewidths_b)
