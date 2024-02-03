@@ -116,29 +116,57 @@ def build_incidence(a, b, typ='Cells', Periodic=0):
 
 
 def ChangeKFromFlow(u, K, NGrid):
+    """
+    Change conductivities of full network given velocities
+    This is done by dividing the network into cells
+    and changing the K's cell by cell
+
+    input:
+    u     - NEdgesX1 array of flow through edges
+    K     - NEdgesXNEdges array of conductivities
+    NGrid - number of cells at each side of the network
+
+    output:
+    K_nxt - NEdgesXNEdges array of conductivities for next iteration
+    """
+
     K_nxt = copy.copy(K)
-    for i in range(NGrid*NGrid):
-        u_sub = u[4*i:4*(i+1)]
-        K_sub = K[4*i:4*(i+1)]
-        K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, K_sub)
-        K_nxt[4*i:4*(i+1)] = K_sub_nxt
+    NCells = NGrid*NGrid  # total number of cells in network
+    for i in range(NCells):  # change K's in every cell separately
+        u_sub = u[4*i:4*(i+1)]  # velocities at particular cell
+        K_sub = K[4*i:4*(i+1)]  # conductivities at particular cell
+        K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, K_sub)  # change K's at particular cell
+        K_nxt[4*i:4*(i+1)] = K_sub_nxt  # put them in the right place at K_nxt
     return K_nxt
 
 
 def ChangeKFromFlow_singleCell(u, K):
-    # u and K are sub vectors and matrices containing 4 elements representing 4 edges of single cell
-#     u_in = where(u==max(u.T))[1]
-#     u_out = where(u==min(u.T))[1]
-#     u_in = np.where(u==max(u.T))[0]
-    K_max = 2
-    K_min = 0.2
-    u_in = np.where(u>0)[0]
-    u_out = np.where(u==min(u.T))[0]
-    rand_u_out = rand.randint(0, len(u_out))
-    pick_u_out = [u_out[rand.randint(0, len(u_out))]]
-    cond = len(list(set(np.where(K==K_min)[0]) & set(u_in)))>0  # check if there is flow inwards where the marble is at, so it has to move
-    if cond or all(K == K_max):
-    # if np.where(K==K_min)[0] == u_in or all(K == K_max):
-        K = K_max*np.ones([4])
-        K[pick_u_out] = K_min       
-    return K
+    """
+    Change conductivities as a 4X4 matrix
+    u and K are sub vectors and matrices w/4 elements representing 4 edges of single cell
+
+    input:
+    u - 4X1 array of flow through cell edges
+    K - 4X4 array of conductivities
+
+    output:
+    K_nxt - 4X4 array of conductivities for next iteration
+    """
+
+    K_max = 2  # maximal conductivity
+    K_min = 0.2  # minimal conductivity
+    u_in_ind = np.where(u>0)[0]  # all indices where u enters the cell
+    u_out_ind = np.where(u==min(u.T) )[0]  # indices if minimal flow, possibly exiting the cell
+    if u[u_out_ind]>0:  # no flow exits the cell, it is a ground, don't put marble inside
+        K_nxt = K_max*np.ones([4])
+    else:  # normal cell, not ground
+        pick_u_out = [u_out_ind[rand.randint(0, len(u_out_ind))]]  # if two edges have exactly the same output flow, choose random one
+        cond1 = len(list(set(np.where(K==K_min)[0]) & set(u_in_ind)))>0  # check if there is flow inwards in edge where marble is at. then it has to move
+        cond2 = all(K == K_max)  # marble is in middle of cell (happens only at first simulation iteration)
+        if cond1 or cond2:  # if flow moves marble from one edge (1st cond) or middle (2nd cond), put lowest conductivity there
+        # if np.where(K==K_min)[0] == u_in or all(K == K_max):
+            K_nxt = K_max*np.ones([4])
+            K_nxt[pick_u_out] = K_min 
+        else:  # flow does not change conductivity
+            K_nxt = copy.copy(K)
+    return K_nxt
