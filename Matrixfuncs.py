@@ -159,18 +159,19 @@ def build_incidence(a, b, typ='Cells', Periodic=0):
     return EI, EJ, EIEJ_plots, DM, NE, NN
 
 
-def ChangeKFromFlow(u, K, K_max, K_min, NGrid):
+def ChangeKFromFlow(u, thresh, K, K_max, K_min, NGrid):
     """
     Change conductivities of full network given velocities
     This is done by dividing the network into cells
     and changing the K's cell by cell
 
     input:
-    u     - [NEdges, 1] array of flow through edges
-    K     - [NEdges] 2D cubic np.array of conductivities
-    K_max - value of maximal conductivity
-    K_min - value of minimal conductivity
-    NGrid - number of cells at each side of the network
+    u      - [NEdges, 1] array of flow through edges
+    thresh - threshold of velocity that moves the marble and changes K, float
+    K      - [NEdges] 2D cubic np.array of conductivities
+    K_max  - value of maximal conductivity
+    K_min  - value of minimal conductivity
+    NGrid  - number of cells at each side of the network
 
     output:
     K_nxt - [NEdges] 2D cubic np.array of conductivities for next iteration
@@ -181,27 +182,28 @@ def ChangeKFromFlow(u, K, K_max, K_min, NGrid):
     for i in range(NCells):  # change K's in every cell separately
         u_sub = u[4*i:4*(i+1)]  # velocities at particular cell
         K_sub = K[4*i:4*(i+1)]  # conductivities at particular cell
-        K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, K_sub, K_max, K_min)  # change K's at particular cell
+        K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, thresh, K_sub, K_max, K_min)  # change K's at particular cell
         K_nxt[4*i:4*(i+1)] = K_sub_nxt  # put them in the right place at K_nxt
     return K_nxt
 
 
-def ChangeKFromFlow_singleCell(u, K, K_max, K_min):
+def ChangeKFromFlow_singleCell(u, thresh, K, K_max, K_min):
     """
     Change conductivities of cell as a 2D cubic np.array sized 4
     u and K are sub vectors and matrices w/4 elements representing 4 edges of single cell
 
     input:
-    u - 1D np.array of flow through cell edges, 4 elements
-    K - 2D cubic array of conductivities with 4 elements on diag
-    K_max - value of maximal conductivity
-    K_min - value of minimal conductivity
+    u      - 1D np.array of flow through cell edges, 4 elements
+    thresh - threshold of velocity that moves the marble and changes K, float
+    K      - 2D cubic array of conductivities with 4 elements on diag
+    K_max  - value of maximal conductivity
+    K_min  - value of minimal conductivity
 
     output:
     K_nxt - 2D cubic array of conductivities with 4 elements on diag for next iteration
     """
 
-    u_in_ind = np.where(u>0)[0]  # all indices where u enters the cell
+    u_in_ind = np.where(u>thresh)[0]  # all indices where u enters the cell at velocity greater than threshold to move marble
     u_out_ind = np.where(u==min(u.T) )[0]  # indices if minimal flow, possibly exiting the cell
     if u[u_out_ind]>0:  # no flow exits the cell, it is a ground, don't put marble inside
         K_nxt = K_max*np.ones([4])
@@ -210,7 +212,8 @@ def ChangeKFromFlow_singleCell(u, K, K_max, K_min):
         # check if there is flow inwards in edge where marble is at. then it has to move
         cond1 = len(list(set(np.where(K==K_min)[0]) & set(u_in_ind)))>0  
         cond2 = all(K == K_max)  # marble is in middle of cell (happens only at first simulation iteration)
-        if cond1 or cond2:  # if flow moves marble from one edge (1st cond) or middle (2nd cond), put lowest conductivity there
+        cond3 = len(u_in_ind) != 0  # inflow too weak to move marble
+        if (cond1 or cond2) and cond3:  # if flow moves marble from one edge (1st cond) or middle (2nd cond), put lowest conductivity there
         # if np.where(K==K_min)[0] == u_in or all(K == K_max):
             K_nxt = K_max*np.ones([4])
             K_nxt[pick_u_out] = K_min 
