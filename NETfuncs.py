@@ -120,6 +120,8 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE):
     edgewidths_b_positive = rescaled_u_NET[list(set(high_K_NET_inds) & set(positive_u_NET_inds))]
     edgewidths_b_negative = rescaled_u_NET[list(set(high_K_NET_inds) & set(negative_u_NET_inds))]
 
+    x=2
+    
     # Need to create a layout when doing
     # separate calls to draw nodes and edges
     nx.draw_networkx_nodes(NET, pos_lattice, cmap=plt.get_cmap('cool'), 

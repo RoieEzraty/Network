@@ -4,23 +4,6 @@ import copy
 from numpy import array as array
 from numpy import arange as arange
 from numpy import zeros as zeros
-
-def initiateK(NE, K_max):
-    """
-    Builds initial conductivity matrix, simulation steps and updates are under Solve.py
-
-    input:
-    NE    - NEdges, int
-    K_max - value of maximal conductivity (no marble)
-
-    output:
-    K     - 1D np.array sized [NEdges] with initial conductivity values for every edge
-    K_mat - 2D cubic np.array sized [NEdges] with initial conductivity values on diagonal
-    """
-    
-    K = K_max*np.ones([NE])
-    K_mat = np.eye(NE) * K
-    return K, K_mat
  
  
 def buildL(DM, K_mat, Cstr, NN):
@@ -48,7 +31,7 @@ def buildL(DM, K_mat, Cstr, NN):
     return L, L_bar
   
   
-def build_incidence(a, b, typ='Cells', Periodic=0):
+def build_incidence(Variabs):
     """
     Builds incidence matrix DM as np.array [NEdges, NNodes]
     its meaning is 1 at input node and -1 at outpus for every row which resembles one edge.
@@ -66,6 +49,11 @@ def build_incidence(a, b, typ='Cells', Periodic=0):
     NE         - NEdges, int
     NN         - NNodes, int
     """
+
+    a = Variabs.NGrid
+    b = Variabs.NGrid
+    typ = Variabs.net_typ
+    Periodic = Variabs.Periodic
 
     if typ == 'Cells':
         
@@ -204,8 +192,8 @@ def ChangeKFromFlow_singleCell(u, thresh, K, K_max, K_min):
     """
 
     u_in_ind = np.where(u>thresh)[0]  # all indices where u enters the cell at velocity greater than threshold to move marble
-    u_out_ind = np.where(u==min(u.T) )[0]  # indices if minimal flow, possibly exiting the cell
-    if u[u_out_ind]>0:  # no flow exits the cell, it is a ground, don't put marble inside
+    u_out_ind = np.where(u==min(u.T))[0]  # indices if minimal flow, possibly exiting the cell
+    if all(u[u_out_ind]>0):  # no flow exits the cell, it is a ground, don't put marble inside
         K_nxt = K_max*np.ones([4])
     else:  # normal cell, not ground
         pick_u_out = [u_out_ind[rand.randint(0, len(u_out_ind))]]  # if two edges have exactly the same output flow, choose random one
@@ -220,3 +208,16 @@ def ChangeKFromFlow_singleCell(u, thresh, K, K_max, K_min):
         else:  # flow does not change conductivity
             K_nxt = copy.copy(K)
     return K_nxt
+
+def K_by_cells(K, K_min, NGrid):
+    """
+    """
+    K_cells = np.zeros([NGrid**2, ])
+    for i in range(NGrid**2):
+        cell = K[4*i:4*(i+1)]
+        marble_place = np.where(cell==K_min)[0]
+        if len(marble_place) == 0:
+            K_cells[i] = 0
+        else:
+            K_cells[i] = marble_place + 1
+    return K_cells
