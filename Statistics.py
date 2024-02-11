@@ -62,3 +62,25 @@ def power_dissip(u, K):
 	P = np.sum(u**2/K)
 	return P
 
+
+def shear_type(u):
+	"""
+	shear_type calculates the type of shear the system obtains after training,
+	defined as the two diagonla values of the normalized and demeaned matrix u_final
+	containing the flows from both outputs (cols) given flow from each input (rows),
+	u_final is calculated under flow_iteration with sim_type='allostery test'
+
+	input:
+	u = np.array [2, 2] of final flows from outputs (cols) given each input (rows)
+
+	output:
+	shear_type = np.array [2, 1] of shear type obstained after training under each input. 
+	             -1 = thickening, 1 = thinning, 0 = no effect
+	"""
+	u_mean = np.mean(u, axis=1)
+	u_demean = (u.T - u_mean).T 
+	u_demean_norm = (u_demean.T / u_mean).T
+	shear_type = (u_demean_norm[0,0]-u_demean_norm[1,0])/2
+	return shear_type
+    
+    # shear_type = np.array([u_demean_norm[0,0], u_demean_norm[1,1]])

@@ -80,6 +80,10 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE):
     matplotlib plot of network structure
     """
 
+    # Preliminaries for the plot
+    node_sizes = 20
+    u_rescale_factor = 9
+    
     # p values at nodes - the same in EIEJ and in networkx's NET
     val_map = {i : p[i][0] for i in range(NN)}
     values = [val_map.get(node, 0.25) for node in NET.nodes()]
@@ -111,7 +115,7 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE):
     b_edges_negative = [NETEdges[i] for i in list(set(high_K_NET_inds) & set(negative_u_NET_inds))]  # edges with high conductivity, negative flow
 
     # save arrow sizes
-    rescaled_u_NET = abs(u_NET)*8/max(abs(u_NET))
+    rescaled_u_NET = abs(u_NET)*u_rescale_factor/max(abs(u_NET))
 #     edgewidths_b = rescaled_u_NET[np.where(K_NET!=min(K_NET))]
 #     edgewidths_r = rescaled_u_NET[np.where(K_NET==min(K_NET))[0]]
 
@@ -120,13 +124,12 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE):
     edgewidths_b_positive = rescaled_u_NET[list(set(high_K_NET_inds) & set(positive_u_NET_inds))]
     edgewidths_b_negative = rescaled_u_NET[list(set(high_K_NET_inds) & set(negative_u_NET_inds))]
 
-    x=2
-    
+
     # Need to create a layout when doing
     # separate calls to draw nodes and edges
     nx.draw_networkx_nodes(NET, pos_lattice, cmap=plt.get_cmap('cool'), 
-                           node_color = values, node_size = 300)
-    nx.draw_networkx_labels(NET, pos_lattice)
+                           node_color = values, node_size = node_sizes)
+    # nx.draw_networkx_labels(NET, pos_lattice)
     
     # draw with right arrow widths ("width") and directions ("arrowstyle")
     nx.draw_networkx_edges(NET, pos_lattice, edgelist=k_edges_positive, edge_color='k', arrows=True, width=edgewidths_k_positive,

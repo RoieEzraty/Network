@@ -186,22 +186,25 @@ class Net_state:
 		self.u_all = np.zeros([Strctr.NE, Variabs.iterations])
 		self.K_all = np.zeros([Strctr.NE, Variabs.iterations])
 		self.K_cells = np.zeros([Variabs.NGrid**2, Variabs.iterations])
-		self.power_dissip = np.zeros([Variabs.iterations, ])
+		self.power_dissip = np.NaN*np.zeros([Variabs.iterations, ])
 		self.MSE =	np.zeros([Variabs.iterations, ])
 		self.Hamming = np.zeros([Variabs.iterations, ])
 		Hamming_i = 1  # dummy for to not break loop before assigned different value
 		MSE_i = 1  # dummy for to not break loop before assigned different value
+		self.convergence_time = np.NaN
 
 		# Determine # iterations
 		if sim_type=='w marbles':
 			iters = Variabs.iterations  # total iteration #
-			iters_same_BCs = 3  # iterations at every given Boundary Conditions - solve flow and update K, repeat 3 times.
+			# iters_same_BCs = 5  # iterations at every given Boundary Conditions - solve flow and update K, repeat 3 times.
+			iters_same_BCs = Variabs.iterations  # iterations at every given Boundary Conditions - solve flow and update K, repeat 3 times.
 		else:
 			iters = 2  # 1 flow iteration for every Boundary Condition
 			iters_same_BCs = 1  # 1 iteration at every Boundary Condition, since conductivities do not change
 
 		# Iterate - solve flow and optionally update conductivities
 		for i in range(iters):
+			cycle = int(np.floor(i/Variabs.circle_step))
 			m = i % 2  # iterate between 1st and 2nd inputs 
 
 			# Determine boundary conditions
@@ -225,18 +228,32 @@ class Net_state:
 			Cstr_full, Cstr, f = Constraints.ConstraintMatrix(NodeData, Nodes, EdgeData, Edges, GroundNodes, Strctr.NN, Strctr.EI, Strctr.EJ)  
 
 			# Build Lagrangians and solve flow, optionally update conductivities and repeat.
+			u = np.zeros([Strctr.NE,])
 			for l in range(iters_same_BCs):
 
 				L, L_bar = Matrixfuncs.buildL(Strctr.DM, self.K_mat, Cstr, Strctr.NN)  # Lagrangian
 
-				p, u = Solve.Solve_flow(L_bar, Strctr.EI, Strctr.EJ, self.K, f)  # pressure and flow
+				# p, u = Solve.Solve_flow(L_bar, Strctr.EI, Strctr.EJ, self.K, f)  # pressure and flow
+				p, u_nxt = Solve.Solve_flow(L_bar, Strctr.EI, Strctr.EJ, self.K, f)  # pressure and flow
 
-				u[abs(u)<10**-10] = 0  # Correct for very low velocities
+				u_nxt[abs(u_nxt)<10**-10] = 0  # Correct for very low velocities
 
 				if sim_type == 'w marbles':  # Update conductivities
-					K_nxt = Matrixfuncs.ChangeKFromFlow(u, Variabs.u_thresh, self.K, Variabs.K_max, Variabs.K_min, Variabs.NGrid)
+					# K_nxt = Matrixfuncs.ChangeKFromFlow(u, Variabs.u_thresh, self.K, Variabs.K_max, Variabs.K_min, Variabs.NGrid)
+					K_nxt = Matrixfuncs.ChangeKFromFlow(u_nxt, Variabs.u_thresh, self.K, Variabs.K_max, Variabs.K_min, Variabs.NGrid)
+					for n in Strctr.Nodes_full.reshape(2):
+						K_nxt[Strctr.EJ == n] = Variabs.K_max
+					for n in Strctr.GroundNodes_full.reshape(2):
+						K_nxt[Strctr.EJ == n] = Variabs.K_max
 					self.K_mat = np.eye(Strctr.NE) * K_nxt
 					self.K = copy.copy(K_nxt)
+
+				# break the loop
+				# since no further changes will be measured in flow and conductivities at end of next cycle
+				if np.all(u_nxt == u):
+					break
+				else:
+					u = copy.copy(u_nxt)
 
 			# Save data in assigned arrays
 			if sim_type == 'allostery test' or sim_type == 'no marbles':
@@ -250,13 +267,22 @@ class Net_state:
 				if i >= Variabs.circle_step:
 					MSE_i = Statistics.flow_MSE(self.u_all[:, i-Variabs.circle_step], Variabs.circle_step, u)
 					Hamming_i = Statistics.K_Hamming(self.K_cells[:, i-Variabs.circle_step], Variabs.circle_step, self.K_cells[:, i])
-					print('pressure is ' + str(Variabs.input_p) + ' Hamming is ' + str(Hamming_i) + ' flow MSE is ' + str(MSE_i))
+					# print('pressure is ' + str(Variabs.input_p) + ' Hamming is ' + str(Hamming_i) + ' flow MSE is ' + str(MSE_i))
 					self.MSE[i-Variabs.circle_step] = MSE_i
 					self.Hamming[i-Variabs.circle_step] = Hamming_i
 
 			# Optionally plot
 			if plot == 'yes' or plot == 'last' and (i == (iters - 1) or i == (iters - 2)):
 				NETfuncs.PlotNetwork(p, u, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE)
+
+			# obtain # of iterations until convergence of conductivities after full cycle of changing BCs and break the loop
+			# since no further changes will be measured in flow and conductivities at end of next cycle
+			if np.isnan(self.convergence_time) and Hamming_i == 0.0:
+				self.convergence_time = cycle
+				print('loop break')
+				if plot == 'last':
+					NETfuncs.PlotNetwork(p, u, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE)
+				break
 
 			# # Break loop if simulation converged
 			# if MSE_i == 0:
