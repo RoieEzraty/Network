@@ -19,7 +19,8 @@ import NETfuncs, Matrixfuncs, Solve, Constraints, Statistics
 
 class User_variables:
 	"""docstring for User_variables"""
-	def __init__(self, NGrid, Periodic, net_typ, K_max, K_min, u_thresh, input_p, flow_scheme, iterations, input_output_pairs):
+	def __init__(self, NGrid, Periodic, net_typ, K_max, K_min, u_thresh, input_p, flow_scheme, task_type, iterations, 
+				input_output_pairs, fixed_node_pairs=0):
 		self.NGrid = NGrid
 		self.Periodic = Periodic
 		self.net_typ = net_typ
@@ -29,15 +30,37 @@ class User_variables:
 		if len(input_p)==1:
 			self.input_p = input_p
 		self.flow_scheme = flow_scheme
+		self.task_type = task_type
 		if flow_scheme == 'taktak':
 			self.circle_step = 4
 		else:
 			self.circle_step = 2
 		self.iterations = iterations
 		self.input_output_pairs = input_output_pairs
+		if task_type == 'XOR':
+			self.fixed_node_pairs = fixed_node_pairs
+		else: 
+			self.fixed_node_pairs = np.array([])
 
 	def assign_input_p(self, p):
 		self.input_p = p
+
+	def assign_fixed_node_p(self, p):
+		"""
+		Assigns the values of the fixed nodes for XOR task
+		values of fixed nodes are p/3 and 2*p/3, these could be modified...
+
+		input:
+		p = input pressure, float
+
+		output:
+		fixed_node_p = 1D numpy array [2, ], hydro. pressure on fixed nodes
+		"""
+		if self.task_type == 'XOR':
+			self.fixed_node_p = np.array([[p/3], [2*p/3]])
+		else:
+			self.fixed_node_p = np.array([])
+			print('no fixed nodes other than input')
 
 
 class Net_structure:
@@ -77,40 +100,49 @@ class Net_structure:
 		self.EdgesTotal = np.append(EdgesConnections, EdgesBounaries)
 
 	def Setup_constraints(self, Variabs):
-		NodeData_full = array([[Variabs.input_p], [Variabs.input_p]])  # input p value
-		Nodes_full = array([[Variabs.input_output_pairs[i, 0]] for i in range(len(Variabs.input_output_pairs))])  # input p node
-
+		InNodeData_full = array([[Variabs.input_p], [Variabs.input_p]])  # input p value
+		InNodes_full = array([[Variabs.input_output_pairs[i, 0]] for i in range(len(Variabs.input_output_pairs))])  # input p node
+		# if fixed nodes exist, append them to nodes:
+		if len(Variabs.fixed_node_pairs)>0:
+			FixedNodeData_full = array([[Variabs.fixed_node_p[0]], [Variabs.fixed_node_p[1]]])  # input p value
+			FixedNodes_full = array([[Variabs.fixed_node_pairs[i, 0]] for i in range(len(Variabs.fixed_node_pairs))])  # input p node
+		else:
+			FixedNodeData_full = np.array([])
+			FixedNodes_full = np.array([])
 
 		GroundNodes_full = array([[Variabs.input_output_pairs[i, 1]] for i in range(len(Variabs.input_output_pairs))])  # nodes with zero pressure
 		GroundNodes_full_Allostery = array([GroundNodes_full[i][0] for i in range(len(GroundNodes_full))])
 
-		EdgeData_full = array([[0], [0]])  # pressure drop value on edge
+		EdgeData_full = array([[0], [0]])  # pressure drop value on edges specified by Edges_full
 
-		# Edges_full = array([EdgesTotal[(EdgesTotal!=np.where(EI==Nodes_full[0])[0][0]) 
+		# Edges_full = array([EdgesTotal[(EdgesTotal!=np.where(EI==InNodes_full[0])[0][0]) 
 		#                                & (EdgesTotal!=np.where(EI==GroundNodes_full[0])[0][0]) 
 		#                                & (EdgesTotal!=np.where(EI==GroundNodes_full[1])[0][0])], 
-		#                     EdgesTotal[(EdgesTotal!=np.where(EI==Nodes_full[1])[0][0]) 
+		#                     EdgesTotal[(EdgesTotal!=np.where(EI==InNodes_full[1])[0][0]) 
 		#                                & (EdgesTotal!=np.where(EI==GroundNodes_full[0])[0][0]) 
 		#                                & (EdgesTotal!=np.where(EI==GroundNodes_full[1])[0][0])]])
 
-		# Edges_full_Allostery = array([EdgesTotal[(EdgesTotal!=np.where(EI==Nodes_full[0])[0][0]) 
+		# Edges_full_Allostery = array([EdgesTotal[(EdgesTotal!=np.where(EI==InNodes_full[0])[0][0]) 
 		#                                          & (EdgesTotal!=np.where(EI==GroundNodes_full[0])[0][0]) 
 		#                                          & (EdgesTotal!=np.where(EI==GroundNodes_full[1])[0][0])], 
-		#                               EdgesTotal[(EdgesTotal!=np.where(EI==Nodes_full[1])[0][0]) 
+		#                               EdgesTotal[(EdgesTotal!=np.where(EI==InNodes_full[1])[0][0]) 
 		#                                          & (EdgesTotal!=np.where(EI==GroundNodes_full[0])[0][0]) 
 		#                                          & (EdgesTotal!=np.where(EI==GroundNodes_full[1])[0][0])]])
 
-		Edges_full = array([self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==Nodes_full[0])[0][0]) 
+		# Full list of edges that have specified pressure drop. it is different from EdgesTotal only if
+		# there are non-zero boundary conditions at periphery of network.
+		Edges_full = array([self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[0])[0][0]) 
 		                                    & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
 		                                    & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])], 
-		                    self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==Nodes_full[1])[0][0]) 
+		                    self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[1])[0][0]) 
 		                                    & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
 		                                    & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])]])
 
-		Edges_full_Allostery = array([self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==Nodes_full[0])[0][0]) 
+		# Same as Edges_full but for Allostery task where both ground nodes are indeed grounded
+		Edges_full_Allostery = array([self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[0])[0][0]) 
 		                                              & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
 		                                              & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])], 
-		                              self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==Nodes_full[1])[0][0]) 
+		                              self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[1])[0][0]) 
 		                                              & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
 		                                              & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])]])
 
@@ -119,13 +151,66 @@ class Net_structure:
 		self.output_edges = array([np.where(np.append(self.EI, self.EJ)==GroundNodes_full[i])[0] % len(self.EI) 
 		                           for i in range(len(GroundNodes_full))])
 
-		self.NodeData_full = NodeData_full
-		self.Nodes_full = Nodes_full
+		self.InNodeData_full = InNodeData_full
+		self.InNodes_full = InNodes_full
+		# If there are nodes with fixed pressure which are not input/output (for 'XOR' for example)
+		if len(FixedNodeData_full)>0:
+			self.FixedNodeData_full = FixedNodeData_full
+			self.FixedNodes_full = FixedNodes_full
+		else:
+			self.FixedNodeData_full = np.array([])
+			self.FixedNodes_full = np.array([])
 		self.GroundNodes_full = GroundNodes_full
 		self.GroundNodes_full_Allostery = GroundNodes_full_Allostery
 		self.EdgeData_full = EdgeData_full
 		self.Edges_full = Edges_full
 		self.Edges_full_Allostery = Edges_full_Allostery
+
+	def Constraints_afo_task(self, Variabs, sim_type, i):
+		"""
+		Explanation?
+		"""
+		if Variabs.task_type == 'Allostery':
+			m = i % 2  # iterate between 1st and 2nd inputs 
+
+			# Determine boundary conditions
+			NodeData = self.InNodeData_full[m]
+			Nodes = self.InNodes_full[m] 
+			EdgeData = self.EdgeData_full[m]
+			Edges = self.Edges_full[m]
+			if sim_type == 'w marbles':
+				GroundNodes = self.GroundNodes_full[m]
+			else:
+				GroundNodes = array([self.GroundNodes_full[i][0] for i in range(len(self.GroundNodes_full))])
+
+			# Simulating normal direction of flow: from input to output
+
+			# Otherwise, if true, switch ground and input nodes every 2nd iteration
+			if i % 4 > 1 and Variabs.flow_scheme == 'taktak':
+				Nodes = self.GroundNodes_full[m]
+				GroundNodes = self.InNodes_full[m]
+
+		elif Variabs.task_type == 'XOR':
+			# m = i % 4  # iterate between 1st and 2nd inputs 
+			# draw random input for XOR.  m is empty / [0] / [1] / [0, 1]
+			m = np.where([rand.randint(0, 2), rand.randint(0, 2)])[0]
+
+			NodeData = self.InNodeData_full[m]
+			Nodes = self.InNodes_full[m] 
+			EdgeData = self.EdgeData_full[m]
+			Edges = self.Edges_full[m]
+
+			# Determine boundary conditions
+			# print('input nodes are:\n' + str(self.InNodes_full))
+			# print('fixed nodes are:\n' + str(self.FixedNodes_full))
+			NodeData = np.append(self.InNodeData_full, self.FixedNodeData_full)
+			# print('both together are:\n' + str(NodeData))
+			Nodes = np.append(self.InNodes_full, self.FixedNodes_full)
+			EdgeData = self.EdgeData_full[0]
+			Edges = self.Edges_full[0]
+			GroundNodes = self.GroundNodes_full[m]
+
+		return NodeData, Nodes, EdgeData, Edges, GroundNodes
 
 
 class Net_state:
@@ -154,7 +239,16 @@ class Net_state:
 
 		self.K = K_max*np.ones([NE])
 		self.K_mat = np.eye(NE) * self.K
-		return self
+
+	def fixAllK(self, Variabs, Strctr):
+		for i in [Strctr.InNodes_full, Strctr.FixedNodes_full, Strctr.GroundNodes_full]:
+			length = len(i)
+			self.fixK(Variabs, Strctr, i, length)
+		self.K_mat = np.eye(Strctr.NE) * self.K
+
+	def fixK(self, Variabs, Strctr, nodes, length):
+		for n in nodes.reshape(length):
+			self.K[Strctr.EJ == n] = Variabs.K_max
 
 	def flow_iterate(self, Variabs, Strctr, NET, sim_type='w marbles', plot='yes'):
 		"""
@@ -204,25 +298,9 @@ class Net_state:
 
 		# Iterate - solve flow and optionally update conductivities
 		for i in range(iters):
-			cycle = int(np.floor(i/Variabs.circle_step))
-			m = i % 2  # iterate between 1st and 2nd inputs 
-
-			# Determine boundary conditions
-			NodeData = Strctr.NodeData_full[m]
-			Nodes = Strctr.Nodes_full[m] 
-			EdgeData = Strctr.EdgeData_full[m]
-			Edges = Strctr.Edges_full[m]
-			if sim_type == 'w marbles':
-				GroundNodes = Strctr.GroundNodes_full[m]
-			else:
-				GroundNodes = array([Strctr.GroundNodes_full[i][0] for i in range(len(Strctr.GroundNodes_full))])
-
-			# Simulating normal direction of flow: from input to output
-
-			# Otherwise, if true, switch ground and input nodes every 2nd iteration
-			if i % 4 > 1 and Variabs.flow_scheme == 'taktak':
-				Nodes = Strctr.GroundNodes_full[m]
-				GroundNodes = Strctr.Nodes_full[m]
+			cycle = int(np.floor(i/Variabs.circle_step))  # task goes over multiple cycles of training, keep the cycle num.
+			
+			NodeData, Nodes, EdgeData, Edges, GroundNodes = Strctr.Constraints_afo_task(Variabs, sim_type, i)  # specific constraints for training step
 
 			# BC and constraints as matrix
 			Cstr_full, Cstr, f = Constraints.ConstraintMatrix(NodeData, Nodes, EdgeData, Edges, GroundNodes, Strctr.NN, Strctr.EI, Strctr.EJ)  
@@ -231,32 +309,33 @@ class Net_state:
 			u = np.zeros([Strctr.NE,])
 			for l in range(iters_same_BCs):
 
+				# print('inside iteration step:\n' + str(l))
+
 				L, L_bar = Matrixfuncs.buildL(Strctr.DM, self.K_mat, Cstr, Strctr.NN)  # Lagrangian
 
-				# p, u = Solve.Solve_flow(L_bar, Strctr.EI, Strctr.EJ, self.K, f)  # pressure and flow
 				p, u_nxt = Solve.Solve_flow(L_bar, Strctr.EI, Strctr.EJ, self.K, f)  # pressure and flow
 
 				u_nxt[abs(u_nxt)<10**-10] = 0  # Correct for very low velocities
 
 				if sim_type == 'w marbles':  # Update conductivities
-					# K_nxt = Matrixfuncs.ChangeKFromFlow(u, Variabs.u_thresh, self.K, Variabs.K_max, Variabs.K_min, Variabs.NGrid)
 					K_nxt = Matrixfuncs.ChangeKFromFlow(u_nxt, Variabs.u_thresh, self.K, Variabs.K_max, Variabs.K_min, Variabs.NGrid)
-					for n in Strctr.Nodes_full.reshape(2):
-						K_nxt[Strctr.EJ == n] = Variabs.K_max
-					for n in Strctr.GroundNodes_full.reshape(2):
-						K_nxt[Strctr.EJ == n] = Variabs.K_max
 					self.K_mat = np.eye(Strctr.NE) * K_nxt
 					self.K = copy.copy(K_nxt)
+
+					# all input and output nodes have no marbles
+					self.fixAllK(Variabs, Strctr)
 
 				# break the loop
 				# since no further changes will be measured in flow and conductivities at end of next cycle
 				if np.all(u_nxt == u):
 					break
 				else:
+					# NETfuncs.PlotNetwork(p, u_nxt, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE)
 					u = copy.copy(u_nxt)
 
 			# Save data in assigned arrays
 			if sim_type == 'allostery test' or sim_type == 'no marbles':
+				self.u = u
 				self.u_final[i,:] = [np.sum(u[Strctr.output_edges[0]]), np.sum(u[Strctr.output_edges[1]])]
 			else:
 				# self.p_all[:, i] = p
@@ -267,13 +346,13 @@ class Net_state:
 				if i >= Variabs.circle_step:
 					MSE_i = Statistics.flow_MSE(self.u_all[:, i-Variabs.circle_step], Variabs.circle_step, u)
 					Hamming_i = Statistics.K_Hamming(self.K_cells[:, i-Variabs.circle_step], Variabs.circle_step, self.K_cells[:, i])
-					# print('pressure is ' + str(Variabs.input_p) + ' Hamming is ' + str(Hamming_i) + ' flow MSE is ' + str(MSE_i))
 					self.MSE[i-Variabs.circle_step] = MSE_i
 					self.Hamming[i-Variabs.circle_step] = Hamming_i
 
 			# Optionally plot
 			if plot == 'yes' or plot == 'last' and (i == (iters - 1) or i == (iters - 2)):
-				NETfuncs.PlotNetwork(p, u, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE)
+				NETfuncs.PlotNetwork(p, u, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE, nodes='yes', edges='no')
+				NETfuncs.PlotNetwork(p, u, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE, nodes='no', edges='yes')
 
 			# obtain # of iterations until convergence of conductivities after full cycle of changing BCs and break the loop
 			# since no further changes will be measured in flow and conductivities at end of next cycle
@@ -281,12 +360,9 @@ class Net_state:
 				self.convergence_time = cycle
 				print('loop break')
 				if plot == 'last':
-					NETfuncs.PlotNetwork(p, u, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE)
+					NETfuncs.PlotNetwork(p, u, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE, nodes='yes', edges='no')
+					NETfuncs.PlotNetwork(p, u, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE, nodes='no', edges='yes')
 				break
-
-			# # Break loop if simulation converged
-			# if MSE_i == 0:
-			# 	break
 
 
 class Networkx_net:

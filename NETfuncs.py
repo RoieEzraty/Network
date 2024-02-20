@@ -62,7 +62,7 @@ def plotNetStructure(NET, layout='Cells'):
     return pos_lattice
 
 
-def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE):
+def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE, nodes='yes', edges='yes'):
     """
     Plots the flow network structure alongside hydrostatic pressure, flows and conductivities
     pressure denoted by colors from purple (high) to cyan (low)
@@ -82,7 +82,7 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE):
 
     # Preliminaries for the plot
     node_sizes = 20
-    u_rescale_factor = 9
+    u_rescale_factor = 6
     
     # p values at nodes - the same in EIEJ and in networkx's NET
     val_map = {i : p[i][0] for i in range(NN)}
@@ -106,8 +106,8 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE):
     
     low_K_NET_inds = np.where(K_NET==min(K_NET))[0]  # indices of edges with low conductivity
     high_K_NET_inds = np.where(K_NET!=min(K_NET))[0]  # indices of edges with higher conductivity
-    positive_u_NET_inds = np.where(u_NET>=0)[0]  # indices of edges with positive flow vel
-    negative_u_NET_inds = np.where(u_NET<0)[0]  # indices of edges with negative flow vel
+    positive_u_NET_inds = np.where(u_NET>10**-10)[0]  # indices of edges with positive flow vel
+    negative_u_NET_inds = np.where(u_NET<-10**-10)[0]  # indices of edges with negative flow vel
     
     k_edges_positive = [NETEdges[i] for i in list(set(low_K_NET_inds) & set(positive_u_NET_inds))]  # edges with low conductivity, positive flow
     k_edges_negative = [NETEdges[i] for i in list(set(low_K_NET_inds) & set(negative_u_NET_inds))]  # edges with low conductivity, negative flow
@@ -127,17 +127,19 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE):
 
     # Need to create a layout when doing
     # separate calls to draw nodes and edges
-    nx.draw_networkx_nodes(NET, pos_lattice, cmap=plt.get_cmap('cool'), 
-                           node_color = values, node_size = node_sizes)
-    # nx.draw_networkx_labels(NET, pos_lattice)
+    if nodes == 'yes':
+        nx.draw_networkx_nodes(NET, pos_lattice, cmap=plt.get_cmap('cool'), 
+                                node_color = values, node_size = node_sizes)
+        # nx.draw_networkx_labels(NET, pos_lattice) 
     
-    # draw with right arrow widths ("width") and directions ("arrowstyle")
-    nx.draw_networkx_edges(NET, pos_lattice, edgelist=k_edges_positive, edge_color='k', arrows=True, width=edgewidths_k_positive,
-                           arrowstyle='-|>')
-    nx.draw_networkx_edges(NET, pos_lattice, edgelist=k_edges_negative, edge_color='k', arrows=True, width=edgewidths_k_negative,
-                           arrowstyle='<|-')
-    nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_positive, edge_color='b', arrows=True, width=edgewidths_b_positive,
-                           arrowstyle='-|>')
-    nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_negative, edge_color='b', arrows=True, width=edgewidths_b_negative,
-                           arrowstyle='<|-')
+    if edges == 'yes':
+        # draw with right arrow widths ("width") and directions ("arrowstyle")
+        nx.draw_networkx_edges(NET, pos_lattice, edgelist=k_edges_positive, edge_color='k', arrows=True, width=edgewidths_k_positive,
+                               arrowstyle='-|>')
+        nx.draw_networkx_edges(NET, pos_lattice, edgelist=k_edges_negative, edge_color='k', arrows=True, width=edgewidths_k_negative,
+                               arrowstyle='<|-')
+        nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_positive, edge_color='b', arrows=True, width=edgewidths_b_positive,
+                               arrowstyle='-|>')
+        nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_negative, edge_color='b', arrows=True, width=edgewidths_b_negative,
+                               arrowstyle='<|-')
     plt.show()
