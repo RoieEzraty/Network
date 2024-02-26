@@ -3,6 +3,7 @@ import copy
 from numpy import zeros as zeros
 from numpy import ones as ones
 from numpy import array as array
+from datetime import datetime
 import networkx as nx
 import matplotlib.pyplot as plt
 
@@ -25,7 +26,7 @@ def buildNetwork(EIEJ_plots):
     return NET
 
  
-def plotNetStructure(NET, layout='Cells'):
+def plotNetStructure(NET, layout='Cells', plot='no'):
     """
     Plots the structure (nodes and edges) of networkx NET 
     
@@ -56,13 +57,16 @@ def plotNetStructure(NET, layout='Cells'):
         pos_lattice = nx.planar_layout(NET)
     else:
         pos_lattice = nx.spectral_layout(NET)
-    nx.draw_networkx(NET, pos_lattice)
-    plt.show()
+
+    if plot == 'yes':
+        nx.draw_networkx(NET, pos_lattice)
+        plt.show()
+        
     print('NET is ready')
     return pos_lattice
 
 
-def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE, nodes='yes', edges='yes'):
+def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE, nodes='yes', edges='yes', savefig='no'):
     """
     Plots the flow network structure alongside hydrostatic pressure, flows and conductivities
     pressure denoted by colors from purple (high) to cyan (low)
@@ -81,12 +85,15 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE, nodes='yes', edge
     """
 
     # Preliminaries for the plot
-    node_sizes = 20
-    u_rescale_factor = 6
+    node_sizes = 24
+    IO_node_sizes = 42
+    u_rescale_factor = 5
     
     # p values at nodes - the same in EIEJ and in networkx's NET
     val_map = {i : p[i][0] for i in range(NN)}
+    # purple_map = {i : (int(p[i][0] == np.max(p[:NN+1])) + 0.5*int(p[i][0] == np.min(p[:NN+1]))) for i in range(NN)}
     values = [val_map.get(node, 0.25) for node in NET.nodes()]
+    # purple_values = [purple_map.get(node) for node in NET.nodes()]
 
     # velocity and conductivity values at edges - not the same in EIEJ and in networkx's NET
     NETEdges = list(NET.edges)
@@ -134,12 +141,22 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE, nodes='yes', edge
     
     if edges == 'yes':
         # draw with right arrow widths ("width") and directions ("arrowstyle")
-        nx.draw_networkx_edges(NET, pos_lattice, edgelist=k_edges_positive, edge_color='k', arrows=True, width=edgewidths_k_positive,
+        # nx.draw_networkx_nodes(NET, pos_lattice, cmap=plt.get_cmap('binary'), 
+        #                         node_color = purple_values, node_size = IO_node_sizes)
+        nx.draw_networkx_edges(NET, pos_lattice, edgelist=k_edges_positive, edge_color='r', arrows=True, width=edgewidths_k_positive,
                                arrowstyle='-|>')
-        nx.draw_networkx_edges(NET, pos_lattice, edgelist=k_edges_negative, edge_color='k', arrows=True, width=edgewidths_k_negative,
+        nx.draw_networkx_edges(NET, pos_lattice, edgelist=k_edges_negative, edge_color='r', arrows=True, width=edgewidths_k_negative,
                                arrowstyle='<|-')
         nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_positive, edge_color='b', arrows=True, width=edgewidths_b_positive,
                                arrowstyle='-|>')
         nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_negative, edge_color='b', arrows=True, width=edgewidths_b_negative,
                                arrowstyle='<|-')
+
+    if savefig=='yes':
+        # prelims for figures
+        comp_path = "C:\\Users\\SMR_Admin\\OneDrive - huji.ac.il\\PhD\\Network Simulation repo\\figs and data\\"
+        # comp_path = "C:\\Users\\roiee\\OneDrive - huji.ac.il\\PhD\\Network Simulation repo\\figs and data\\"
+        datenow = datetime.today().strftime('%Y_%m_%d_%H_%M_%S')
+        plt.savefig(comp_path + 'network_' + str(datenow) + '.png', bbox_inches='tight')
+
     plt.show()

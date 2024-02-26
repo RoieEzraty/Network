@@ -147,7 +147,7 @@ def build_incidence(Variabs):
     return EI, EJ, EIEJ_plots, DM, NE, NN
 
 
-def ChangeKFromFlow(u, thresh, K, K_max, K_min, NGrid):
+def ChangeKFromFlow(u, thresh, K, NGrid, K_change_scheme='marbles', K_max=1, K_min=0.5, beta=0.0):
     """
     Change conductivities of full network given velocities
     This is done by dividing the network into cells
@@ -166,12 +166,22 @@ def ChangeKFromFlow(u, thresh, K, K_max, K_min, NGrid):
     """
 
     K_nxt = copy.copy(K)
-    NCells = NGrid*NGrid  # total number of cells in network
-    for i in range(NCells):  # change K's in every cell separately
-        u_sub = u[4*i:4*(i+1)]  # velocities at particular cell
-        K_sub = K[4*i:4*(i+1)]  # conductivities at particular cell
-        K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, thresh, K_sub, K_max, K_min)  # change K's at particular cell
-        K_nxt[4*i:4*(i+1)] = K_sub_nxt  # put them in the right place at K_nxt
+
+    if K_change_scheme == 'marbles':    
+        NCells = NGrid*NGrid  # total number of cells in network
+        for i in range(NCells):  # change K's in every cell separately
+            u_sub = u[4*i:4*(i+1)]  # velocities at particular cell
+            K_sub = K[4*i:4*(i+1)]  # conductivities at particular cell
+            K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, thresh, K_sub, K_max, K_min)  # change K's at particular cell
+            K_nxt[4*i:4*(i+1)] = K_sub_nxt  # put them in the right place at K_nxt
+    elif K_change_scheme == 'propto_current_squared':
+        u_sqrd_mean = np.mean(u**2)
+        R = K ** (-1)
+        R_max = K_min ** (-1)
+        R_nxt = R + beta * u ** 2 / u_sqrd_mean * (R_max - R) / R_max
+        K_nxt = R_nxt ** (-1)
+        # K_nxt = K + beta * u ** 2 / u_sqrd_mean * (K - K_min) / K_max
+        print(K_nxt)
     return K_nxt
 
 
@@ -216,6 +226,7 @@ def K_by_cells(K, K_min, NGrid):
     for i in range(NGrid**2):
         cell = K[4*i:4*(i+1)]
         marble_place = np.where(cell==K_min)[0]
+        print(marble_place)
         if len(marble_place) == 0:
             K_cells[i] = 0
         else:
