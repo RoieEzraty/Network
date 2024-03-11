@@ -28,6 +28,8 @@ def buildL(DM, K_mat, Cstr, NN):
     L_bar[NN:,:NN] = Cstr  # the bottom most rows of augmented L are the constraints
     L_bar[:NN,NN:] = Cstr.T  # the rightmost columns of augmented L are the constraints
     L_bar[:NN,:NN] = L  # The topmost and leftmost part of augmented L are the basic L
+    # shapeL = np.shape(L_bar)
+    # print('size of L is %d over %d' %(shapeL[0], shapeL[1]))
     return L, L_bar
   
   
@@ -167,25 +169,24 @@ def ChangeKFromFlow(u, thresh, K, NGrid, K_change_scheme='marbles', K_max=1, K_m
 
     K_nxt = copy.copy(K)
 
-    if K_change_scheme == 'marbles':    
-        NCells = NGrid*NGrid  # total number of cells in network
-        for i in range(NCells):  # change K's in every cell separately
-            u_sub = u[4*i:4*(i+1)]  # velocities at particular cell
-            K_sub = K[4*i:4*(i+1)]  # conductivities at particular cell
-            K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, thresh, K_sub, K_max, K_min)  # change K's at particular cell
-            K_nxt[4*i:4*(i+1)] = K_sub_nxt  # put them in the right place at K_nxt
-    elif K_change_scheme == 'propto_current_squared':
+    if K_change_scheme == 'propto_current_squared':
         u_sqrd_mean = np.mean(u**2)
         R = K ** (-1)
         R_max = K_min ** (-1)
         R_nxt = R + beta * u ** 2 / u_sqrd_mean * (R_max - R) / R_max
         K_nxt = R_nxt ** (-1)
-        # K_nxt = K + beta * u ** 2 / u_sqrd_mean * (K - K_min) / K_max
-        print(K_nxt)
+    elif K_change_scheme == 'marbles' or K_change_scheme == 'marbles_pressure':    
+        NCells = NGrid*NGrid  # total number of cells in network
+        for i in range(NCells):  # change K's in every cell separately
+            u_sub = u[4*i:4*(i+1)]  # velocities at particular cell
+            K_sub = K[4*i:4*(i+1)]  # conductivities at particular cell
+            K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, thresh, K_sub, K_max, K_min, K_change_scheme)  # change K's at particular cell
+            K_nxt[4*i:4*(i+1)] = K_sub_nxt  # put them in the right place at K_nxt
+
     return K_nxt
 
 
-def ChangeKFromFlow_singleCell(u, thresh, K, K_max, K_min):
+def ChangeKFromFlow_singleCell(u, thresh, K, K_max, K_min, K_change_scheme):
     """
     Change conductivities of cell as a 2D cubic np.array sized 4
     u and K are sub vectors and matrices w/4 elements representing 4 edges of single cell
@@ -201,8 +202,15 @@ def ChangeKFromFlow_singleCell(u, thresh, K, K_max, K_min):
     K_nxt - 2D cubic array of conductivities with 4 elements on diag for next iteration
     """
 
-    u_in_ind = np.where(u>thresh)[0]  # all indices where u enters the cell at velocity greater than threshold to move marble
-    u_out_ind = np.where(u==min(u.T))[0]  # indices if minimal flow, possibly exiting the cell
+    if K_change_scheme == 'marbles_pressure':  # marbles move due to pressure difference delta_p
+        delta_p = u / K  # pressure difference at edge
+        p_thresh = thresh / K_max  # pressure difference threshold to move marble
+        u_in_ind = np.where(delta_p>p_thresh)[0]  # all indices where u enters the cell at velocity greater than threshold to move marble
+        u_out_ind = np.where(delta_p==min(delta_p.T))[0]  # indices of minimal flow, possibly exiting the cell
+    elif K_change_scheme == 'marbles':  # marbles move due to flow u
+        u_in_ind = np.where(u>thresh)[0]  # all indices where u enters the cell at velocity greater than threshold to move marble
+        u_out_ind = np.where(u==min(u.T))[0]  # indices if minimal flow, possibly exiting the cell
+
     if all(u[u_out_ind]>0):  # no flow exits the cell, it is a ground, don't put marble inside
         K_nxt = K_max*np.ones([4])
     else:  # normal cell, not ground
@@ -226,7 +234,6 @@ def K_by_cells(K, K_min, NGrid):
     for i in range(NGrid**2):
         cell = K[4*i:4*(i+1)]
         marble_place = np.where(cell==K_min)[0]
-        print(marble_place)
         if len(marble_place) == 0:
             K_cells[i] = 0
         else:

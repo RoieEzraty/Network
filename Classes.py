@@ -136,26 +136,49 @@ class Net_structure:
 
 		# Full list of edges that have specified pressure drop. it is different from EdgesTotal only if
 		# there are non-zero boundary conditions at periphery of network.
-		Edges_full = np.array([self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[0])[0][0]) 
+		# print(self.EdgesTotal)
+		# print(self.EJ)
+		# print(InNodes_full)
+		# print(GroundNodes_full)
+		# print(self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[0])[0][0]) 
+		#                                     & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
+		#                                     & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])])
+		# print(self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[1])[0][0]) 
+		#                                     & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
+		#                                     & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])])
+		# print([self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[0])[0][0]) 
+		#                                     & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
+		#                                     & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])], 
+		#                     self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[1])[0][0]) 
+		#                                     & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
+		#                                     & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])]])
+		# Edges_full = np.array([self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[0])[0][0]) 
+		#                                     & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
+		#                                     & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])], 
+		#                     self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[1])[0][0]) 
+		#                                     & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
+		#                                     & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])]])
+		Edges_full = [self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[0])[0][0]) 
 		                                    & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
 		                                    & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])], 
 		                    self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[1])[0][0]) 
 		                                    & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
-		                                    & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])]])
+		                                    & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])]]
 
 		# Same as Edges_full but for Allostery task where both ground nodes are indeed grounded
-		Edges_full_Allostery = np.array([self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[0])[0][0]) 
+		# Edges_full_Allostery = np.array([self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[0])[0][0]) 
+		#                                               & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
+		#                                               & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])], 
+		#                               self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[1])[0][0]) 
+		#                                               & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
+		#                                               & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])]])
+		Edges_full_Allostery = [self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[0])[0][0]) 
 		                                              & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
 		                                              & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])], 
 		                              self.EdgesTotal[(self.EdgesTotal!=np.where(self.EJ==InNodes_full[1])[0][0]) 
 		                                              & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[0])[0][0]) 
-		                                              & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])]])
+		                                              & (self.EdgesTotal!=np.where(self.EJ==GroundNodes_full[1])[0][0])]]
 
-		print(self.EI)
-		print(Edges_full)
-		print(Edges_full_Allostery)
-		print(Edges_full_Allostery==Edges_full)
-		print(Edges_full_Allostery==self.EdgesTotal)
 		# Edges_full = array([EdgesConnections, EdgesConnections])
 		# output_edges = [np.where(np.append(EI, EJ)==GroundNodes_full[i])[0][0] % len(EI) for i in range(len(GroundNodes_full))]
 		self.output_edges = np.array([np.where(np.append(self.EI, self.EJ)==GroundNodes_full[i])[0] % len(self.EI) 
@@ -222,10 +245,7 @@ class Net_structure:
 			Edges = self.Edges_full[m]
 
 			# Determine boundary conditions
-			# print('input nodes are:\n' + str(self.InNodes_full))
-			# print('fixed nodes are:\n' + str(self.FixedNodes_full))
 			NodeData = np.append(self.InNodeData_full, self.FixedNodeData_full)
-			# print('both together are:\n' + str(NodeData))
 			Nodes = np.append(self.InNodes_full, self.FixedNodes_full)
 			EdgeData = self.EdgeData_full[0]
 			Edges = self.Edges_full[0]
@@ -278,14 +298,18 @@ class Net_state:
 		for n in nodes.reshape(length):
 			self.K[Strctr.EJ == n] = Variabs.K_max
 
-	def solve_flow_const_K(self, Variabs, Strctr, u, Cstr, f, iters_same_BCs):
+	def solve_flow_const_K(self, Variabs, Strctr, NET, u, Cstr, f, iters_same_BCs):
 		"""
 		Explain function Roie, perhaps don't miss out on it this time
 		"""
 
 		u_nxt = copy.copy(u)
 
-		for o in range(iters_same_BCs):
+		for o in range(iters_same_BCs):	
+
+			# print('iteration # %d with constant K' %o)
+			# print('starting from u =')
+			# print(u)
 
 			K_eff = copy.copy(self.K)
 			K_eff[u_nxt>0] = Variabs.K_max
@@ -295,9 +319,20 @@ class Net_state:
 
 			p, u_nxt = Solve.Solve_flow(L_bar, Strctr.EI, Strctr.EJ, K_eff, f)  # pressure and flow
 
+			u_nxt[abs(u_nxt)<10**-10] = 0  # Correct for very low velocities
+			p[abs(p)<10**-10] = 0  # Correct for very low pressures
+
+			# print('going to u_nxt =')
+			# print(u_nxt)
+			
+			# NETfuncs.PlotNetwork(p, u_nxt, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE, 
+			# 					nodes='no', edges='yes', savefig='no')
+
 			# break the loop
 			# since no further changes will be measured in flow and conductivities at end of next cycle
-			if np.all(u_nxt == u):
+			if np.all(np.where(u_nxt>0)[0] == np.where(u>0)[0]):
+			# if np.all(u_nxt == u):
+				u = copy.copy(u_nxt)
 				break
 			else:
 				# NETfuncs.PlotNetwork(p, u_nxt, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE)
@@ -305,7 +340,7 @@ class Net_state:
 
 		return p, u_nxt
 
-	def solve_flow_until_conv(self, Variabs, Strctr, u, Cstr, f, iters_same_BCs, sim_type):
+	def solve_flow_until_conv(self, Variabs, Strctr, NET, u, Cstr, f, iters_same_BCs, sim_type):
 		"""
 		Explain function Roie, perhaps don't miss out on it this time
 		"""
@@ -313,16 +348,17 @@ class Net_state:
 		for l in range(iters_same_BCs):
 
 			if Variabs.K_type == 'flow_dep':
-				p, u_nxt = self.solve_flow_const_K(Variabs, Strctr, u, Cstr, f, iters_same_BCs)
+				# print('solve flow under constant K for the %d time' %l)
+				p, u_nxt = self.solve_flow_const_K(Variabs, Strctr, NET, u, Cstr, f, iters_same_BCs)
 			else:
 				L, L_bar = Matrixfuncs.buildL(Strctr.DM, self.K_mat, Cstr, Strctr.NN)  # Lagrangian
 
 				p, u_nxt = Solve.Solve_flow(L_bar, Strctr.EI, Strctr.EJ, self.K, f)  # pressure and flow
 
-			u_nxt[abs(u_nxt)<10**-10] = 0  # Correct for very low velocities
-			p[abs(p)<10**-10] = 0  # Correct for very low pressures
+			# u_nxt[abs(u_nxt)<10**-10] = 0  # Correct for very low velocities
+			# p[abs(p)<10**-10] = 0  # Correct for very low pressures
 
-			if sim_type == 'w marbles':  # Update conductivities
+			if sim_type == 'w marbles' or sim_type == 'allostery test':  # Update conductivities
 				K_nxt = Matrixfuncs.ChangeKFromFlow(u_nxt, Variabs.u_thresh, self.K, Variabs.NGrid, 
 													K_change_scheme=Variabs.K_scheme, K_max=Variabs.K_max, 
 													K_min=Variabs.K_min, beta=Variabs.beta)
@@ -388,14 +424,20 @@ class Net_state:
 			iters_same_BCs = Variabs.iterations  # iterations at every given B.C. - solve flow and update K, repeat 3 times.
 		else:
 			iters = 2  # 1 flow iteration for every Boundary Condition
-			iters_same_BCs = 1  # 1 iteration at every Boundary Condition, since conductivities do not change
+			if Variabs.K_type == 'flow_dep':
+				iters_same_BCs = Variabs.iterations  # still requires some time to converge due to flow feedback since K is not bidirectional
+			else:
+				iters_same_BCs = 1  # 1 iteration at every Boundary Condition, since conductivities do not change
 
 		# Iterate - solve flow and optionally update conductivities
 		for i in range(iters):
 			cycle = int(np.floor(i/Variabs.circle_step))  # task goes over multiple cycles of training, keep the cycle num.
+			print('cycle # %d' %cycle)
 			
 			# specific constraints for training step
 			NodeData, Nodes, EdgeData, Edges, GroundNodes = Strctr.Constraints_afo_task(Variabs, sim_type, i)
+
+			# print(Variabs.input_p)
 
 			# BC and constraints as matrix
 			Cstr_full, Cstr, f = Constraints.ConstraintMatrix(NodeData, Nodes, EdgeData, Edges, GroundNodes, 
@@ -404,44 +446,8 @@ class Net_state:
 			# Build Lagrangians and solve flow, optionally update conductivities and repeat.
 			u = np.zeros([Strctr.NE,])
 
-			print('K before iteration:')
-			print(self.K)
-
 			# solve for flow interatively until convergence under same BCs, optionally changing K due to flow
-			p, u = self.solve_flow_until_conv(Variabs, Strctr, u, Cstr, f, iters_same_BCs, sim_type)
-
-			print('K after iteration:')
-			print(self.K)
-
-			# for l in range(iters_same_BCs):
-
-			# 	# print('inside iteration step:\n' + str(l))
-
-			# 	L, L_bar = Matrixfuncs.buildL(Strctr.DM, self.K_mat, Cstr, Strctr.NN)  # Lagrangian
-
-			# 	p, u_nxt = Solve.Solve_flow(L_bar, Strctr.EI, Strctr.EJ, self.K, f)  # pressure and flow
-
-			# 	u_nxt[abs(u_nxt)<10**-10] = 0  # Correct for very low velocities
-			# 	p[abs(p)<10**-10] = 0  # Correct for very low pressures
-
-			# 	if sim_type == 'w marbles':  # Update conductivities
-			# 		K_nxt = Matrixfuncs.ChangeKFromFlow(u_nxt, Variabs.u_thresh, self.K, Variabs.NGrid, 
-			# 											K_change_scheme=Variabs.K_scheme, K_max=Variabs.K_max, 
-			# 											K_min=Variabs.K_min, beta=Variabs.beta)
-					
-			# 		self.K_mat = np.eye(Strctr.NE) * K_nxt
-			# 		self.K = copy.copy(K_nxt)
-
-			# 		# all input and output nodes have no marbles
-			# 		self.fixAllK(Variabs, Strctr)
-
-			# 	# break the loop
-			# 	# since no further changes will be measured in flow and conductivities at end of next cycle
-			# 	if np.all(u_nxt == u):
-			# 		break
-			# 	else:
-			# 		# NETfuncs.PlotNetwork(p, u_nxt, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE)
-			# 		u = copy.copy(u_nxt)
+			p, u = self.solve_flow_until_conv(Variabs, Strctr, NET, u, Cstr, f, iters_same_BCs, sim_type)
 
 			# Save data in assigned arrays
 			if sim_type == 'allostery test' or sim_type == 'no marbles':
@@ -452,9 +458,6 @@ class Net_state:
 				# self.p_all[:, i] = p
 				self.u_all[:, i] = u
 				self.K_all[:, i] = self.K
-				print(self.K)
-				print(Variabs.K_min)
-				print(Variabs.NGrid)
 				self.K_cells[:, i] = Matrixfuncs.K_by_cells(self.K, Variabs.K_min, Variabs.NGrid)
 				self.power_dissip[i] = Statistics.power_dissip(u, self.K)
 				if i >= Variabs.circle_step:
