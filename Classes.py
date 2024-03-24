@@ -251,6 +251,24 @@ class Net_structure:
 			Edges = self.Edges_full[0]
 			GroundNodes = self.GroundNodes_full[m]
 
+		elif Variabs.task_type == 'Channeling_diag' or Variabs.task_type == 'Channeling_straight':
+
+			m=i%2
+			
+			if m == 0:
+				# Determine boundary conditions
+				NodeData = self.InNodeData_full[0]
+				Nodes = self.InNodes_full[0] 
+				EdgeData = self.EdgeData_full[0]
+				Edges = self.Edges_full[0]
+				GroundNodes = self.GroundNodes_full[0]
+			else:
+				NodeData = self.InNodeData_full[0]
+				Nodes = self.GroundNodes_full[0]
+				EdgeData = self.EdgeData_full[1]
+				Edges = self.Edges_full[1]
+				GroundNodes = Variabs.input_output_pairs[1, :]
+
 		return NodeData, Nodes, EdgeData, Edges, GroundNodes
 
 
@@ -277,13 +295,14 @@ class Net_state:
 		"""
 		NE = Strctr.NE
 		K_max = Variabs.K_max
+		frac_moved = 0.0  # fraction of marbles moved, on average
 
 		self.K = K_max*np.ones([NE])
 		self.K_mat = np.eye(NE) * self.K
 
 		if noise == 'yes':
 			# fictional velocity field just to move marble randomly
-			u_rand = 1.25 * Variabs.u_thresh * 2 * (rand.random([Strctr.NN])-1/2) 
+			u_rand = (1+frac_moved) * Variabs.u_thresh * 2 * (rand.random([Strctr.NN])-1/2) 
 			self.K = Matrixfuncs.ChangeKFromFlow(u_rand, Variabs.u_thresh, self.K, Variabs.NGrid, 
 												K_change_scheme=Variabs.K_scheme, K_max=Variabs.K_max, 
 												K_min=Variabs.K_min)  # move marble, change conductivities
@@ -355,23 +374,32 @@ class Net_state:
 
 				p, u_nxt = Solve.Solve_flow(L_bar, Strctr.EI, Strctr.EJ, self.K, f)  # pressure and flow
 
-			# u_nxt[abs(u_nxt)<10**-10] = 0  # Correct for very low velocities
-			# p[abs(p)<10**-10] = 0  # Correct for very low pressures
+			# NETfuncs.PlotNetwork(p, u_nxt, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE, 
+			# 					nodes='yes', edges='no', savefig='no')
+			# NETfuncs.PlotNetwork(p, u_nxt, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE, 
+			# 					nodes='no', edges='yes', savefig='no')
+			# plt.show()
 
-			if sim_type == 'w marbles' or sim_type == 'allostery test':  # Update conductivities
+			# if sim_type == 'w marbles' or sim_type == 'allostery test':  # Update conductivities
+			if sim_type == 'w marbles':  # Update conductivities
 				K_nxt = Matrixfuncs.ChangeKFromFlow(u_nxt, Variabs.u_thresh, self.K, Variabs.NGrid, 
 													K_change_scheme=Variabs.K_scheme, K_max=Variabs.K_max, 
 													K_min=Variabs.K_min, beta=Variabs.beta)
 				
 				self.K_mat = np.eye(Strctr.NE) * K_nxt
+				print('difference in u %f ' %(np.mean(np.abs(u_nxt) - np.abs(u))/np.mean(np.abs(u_nxt))))
+				K_old = copy.copy(self.K)
 				self.K = copy.copy(K_nxt)
 
 				# all input and output nodes have no marbles
 				self.fixAllK(Variabs, Strctr)
+				print('difference in K %d ' %int(np.sum(K_old != self.K)/2))
 
 			# break the loop
 			# since no further changes will be measured in flow and conductivities at end of next cycle
 			if np.all(u_nxt == u):
+				print('converged, no further change in K')
+				print('# iterations %d' %l)
 				break
 			else:
 				# NETfuncs.PlotNetwork(p, u_nxt, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE)
@@ -404,11 +432,26 @@ class Net_state:
 		K_all   - 2D np.array [NE, iterations] of conductivities on all edges for all simulation steps
 		"""
 
+		# Determine # iterations
+		if sim_type=='w marbles' and Variabs.task_type!='Channeling_diag' and Variabs.task_type!='Channeling_straight':
+			iters = Variabs.iterations  # total iteration #
+			# iters_same_BCs = 5  # iterations at every given Boundary Conditions - solve flow and update K, repeat 3 times.
+			iters_same_BCs = Variabs.iterations  # iterations at every given B.C. - solve flow and update K, repeat 3 times.
+		elif Variabs.task_type=='Channeling_diag' or Variabs.task_type=='Channeling_straight':
+			iters = 3
+			iters_same_BCs = Variabs.iterations 
+		else:
+			iters = 2  # 1 flow iteration for every Boundary Condition
+			if Variabs.K_type=='flow_dep':
+				iters_same_BCs = Variabs.iterations  # still requires some time to converge due to flow feedback since K is not bidirectional
+			else:
+				iters_same_BCs = 1  # 1 iteration at every Boundary Condition, since conductivities do not change
+
 		# Initiate data arrays
 		self.u_final = np.zeros([2, 2])
-		self.u_all = np.zeros([Strctr.NE, Variabs.iterations])
-		self.K_all = np.zeros([Strctr.NE, Variabs.iterations])
-		self.K_cells = np.zeros([Variabs.NGrid**2, Variabs.iterations])
+		self.u_all = np.zeros([Strctr.NE, iters])
+		self.K_all = np.zeros([Strctr.NE, iters])
+		self.K_cells = np.zeros([Variabs.NGrid**2, iters])
 		self.power_dissip = np.NaN*np.zeros([Variabs.iterations, ])
 		self.MSE =	np.zeros([Variabs.iterations, ])
 		self.Hamming = np.zeros([Variabs.iterations, ])
@@ -416,18 +459,6 @@ class Net_state:
 		MSE_i = 1  # dummy for to not break loop before assigned different value
 		self.convergence_time = np.NaN
 		stop_bool = 0
-
-		# Determine # iterations
-		if sim_type=='w marbles':
-			iters = Variabs.iterations  # total iteration #
-			# iters_same_BCs = 5  # iterations at every given Boundary Conditions - solve flow and update K, repeat 3 times.
-			iters_same_BCs = Variabs.iterations  # iterations at every given B.C. - solve flow and update K, repeat 3 times.
-		else:
-			iters = 2  # 1 flow iteration for every Boundary Condition
-			if Variabs.K_type == 'flow_dep':
-				iters_same_BCs = Variabs.iterations  # still requires some time to converge due to flow feedback since K is not bidirectional
-			else:
-				iters_same_BCs = 1  # 1 iteration at every Boundary Condition, since conductivities do not change
 
 		# Iterate - solve flow and optionally update conductivities
 		for i in range(iters):
@@ -455,7 +486,7 @@ class Net_state:
 				self.p = p
 				self.u_final[i,:] = [np.sum(u[Strctr.output_edges[0]]), np.sum(u[Strctr.output_edges[1]])]
 			else:
-				# self.p_all[:, i] = p
+				self.p = p
 				self.u_all[:, i] = u
 				self.K_all[:, i] = self.K
 				self.K_cells[:, i] = Matrixfuncs.K_by_cells(self.K, Variabs.K_min, Variabs.NGrid)

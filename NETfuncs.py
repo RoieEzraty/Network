@@ -45,10 +45,10 @@ def plotNetStructure(NET, layout='Cells', plot='no'):
         k=0  # dummy
         for i in range(NGrid):  # network rows
             for j in range(NGrid):  # network columns
-                pos_lattice[5*i+5*j+5*k] = array([-2+5*j, 0+5*i])  # left node in cell
-                pos_lattice[5*i+5*j+5*k+1] = array([0+5*j, -2+5*i])  # lower node in cell
-                pos_lattice[5*i+5*j+5*k+2] = array([2+5*j, 0+5*i])  # right node
-                pos_lattice[5*i+5*j+5*k+3] = array([0+5*j, 2+5*i])  # upper node
+                pos_lattice[5*i+5*j+5*k] = array([-2.2+5*j, 0+5*i])  # left node in cell
+                pos_lattice[5*i+5*j+5*k+1] = array([0+5*j, -2.2+5*i])  # lower node in cell
+                pos_lattice[5*i+5*j+5*k+2] = array([2.2+5*j, 0+5*i])  # right node
+                pos_lattice[5*i+5*j+5*k+3] = array([0+5*j, 2.2+5*i])  # upper node
                 pos_lattice[5*i+5*j+5*k+4] = array([0+5*j, 0+5*i])  # middle node
             k+=NGrid-1  # add to dummy index so skipping to next cell
     elif layout == 'spectral':
