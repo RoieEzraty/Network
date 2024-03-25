@@ -154,9 +154,9 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE, nodes='yes', edge
 
     if savefig=='yes':
         # prelims for figures
-        comp_path = "C:\\Users\\SMR_Admin\\OneDrive - huji.ac.il\\PhD\\Network Simulation repo\\figs and data\\"
-        # comp_path = "C:\\Users\\roiee\\OneDrive - huji.ac.il\\PhD\\Network Simulation repo\\figs and data\\"
+        # comp_path = "C:\\Users\\SMR_Admin\\OneDrive - huji.ac.il\\PhD\\Network Simulation repo\\figs and data\\"
+        comp_path = "C:\\Users\\roiee\\OneDrive - huji.ac.il\\PhD\\Network Simulation repo\\figs and data\\"
         datenow = datetime.today().strftime('%Y_%m_%d_%H_%M_%S')
-        plt.savefig(comp_path + 'network_' + str(datenow) + '.png', bbox_inches='tight')
+        plt.savefig(comp_path + 'network_' + str(datenow) + '.png', bbox_s='tight')
 
     plt.show()

@@ -10,17 +10,52 @@ import NETfuncs, Matrixfuncs, Solve, Constraints, Statistics
 
 
 class User_variables:
-	"""docstring for User_variables"""
-	def __init__(self, NGrid, Periodic, net_typ, u_thresh, input_p, flow_scheme, task_type, K_scheme, K_type,
-				iterations, input_output_pairs, fixed_node_pairs=0, K_max=1, K_min=0.5, beta=0.0):
-		self.NGrid = NGrid
-		self.Periodic = Periodic
-		self.net_typ = net_typ
-		self.u_thresh = u_thresh
+	"""
+	User_variables saves all user variables for network simulation
+
+	inputs:
+	NGrid              - int, lattice dimension is Ngrid X Ngrid
+	input_p            - float, pressure at input node
+	flow_scheme        - str, order of pressure appliance in training and test
+						 'one_shot' = apply pressure drop from 1 output node and 1 output node, wait till convergence
+						 'unidir'   = apply pressure drop only in the regular directions - constrained node = positive, ground = 0
+                                      there are 2 input and output pairs, exchange between them
+                         'taktak'   = apply pressure drop unidir once, meaning 1st input and output pair and then 2nd pair.
+                                      then switch ground and constrained nodes to apply oposite dir.
+	task_typ           - str, task that is being simulated
+						 'Allostery_one_pair' = 1 pair of input and outputs
+						 'Allostery'          = 2 pairs of input and outputs
+						 'XOR'                = 2 inputs and 2 outputs. difference between output nodes encodes the XOR result of the 2 inputs
+						 'Channeling_diag'    = 1st from input to diagonal output, then from output to 2 perpindicular nodes. 
+                                                test from input to output
+	K_scheme           - str, scheme to change conductivities
+						 'propto_current_squared' = conductivity on edge changes due to squared on edge (use beta argument), no marbles involves
+						 'marbles_pressure'       = conductivities in each cells change due to marbles moving due to pressure difference.
+						                            binary values K_min, K_max
+						 'marbles_u'              = conductivities in each cells change due to marbles moving due to flow velocity.
+						                            binary values K_min, K_max
+	K_type             - str, effect of flow on conductivity without changing marble positions
+					     'bidir'    = conductivity is the same regardless of flow directions
+					     'flow_dep' = conductivity depends on flow direction - if into cell then maximal, if out and there is a marble then lower
+	iterations         - int, # iterations allowed under flow cycles / updating conductivities
+	input_output_pairs - np.array of input and output node pairs. State.flow_iterate() will know how to handle them.
+	Periodic           - bool, 'True'=lattice has periodic boundaries, default='False'
+	net_typ            - str, layout for NETfuncs plotNetStructure(). 'Cells' is Roie's style of network and is default
+	u_thresh           - float, threshold to move marbles, default=1
+	fixed_node_pairs   - default=0
+	K_max              - default=1
+	K_min              - default=0.5
+	beta               - default=0.0
+	"""
+
+	def __init__(self, NGrid, input_p, flow_scheme, task_type, K_scheme, K_type, iterations, input_output_pairs, 
+		         Periodic='False', net_typ='Cells', u_thresh=1, fixed_node_pairs=0, K_max=1, K_min=0.5, beta=0.0):
+		self.NGrid = NGrid		
 		if len(input_p)==1:
 			self.input_p = input_p
 
 		self.flow_scheme = flow_scheme
+		# # of iterations in every circle, for calculation of convergence
 		if flow_scheme == 'taktak':
 			self.circle_step = 4
 		elif flow_scheme == 'unidir':
@@ -34,14 +69,16 @@ class User_variables:
 		else: 
 			self.fixed_node_pairs = np.array([])
 
+		self.iterations = iterations
+		self.input_output_pairs = input_output_pairs
+		self.Periodic = Periodic
+		self.net_typ = net_typ
+		self.u_thresh = u_thresh
 		self.K_scheme = K_scheme
 		self.K_type = K_type
 		self.K_max = K_max
 		self.K_min = K_min
 		self.beta = beta
-
-		self.iterations = iterations
-		self.input_output_pairs = input_output_pairs
 
 	def assign_input_p(self, p):
 		self.input_p = p
@@ -68,20 +105,28 @@ class User_variables:
 
 
 class Net_structure:
-	"""docstring for Net_Strctr"""
-	# def __init__(self, EI, EJ, EIEJ_plots, DM, NE, NN):
-	# 	self.EI = EI
-	# 	self.EJ = EJ 
-	# 	self.EIEJ_plots = EIEJ_plots
-	# 	self.DM = DM
-	# 	self.NE = NE 
-	# 	self.NN = NN
+	"""
+	Net_structure class save the structure of the network
+	"""
+	
 	def __init__(self):
 		self.NE = 0
 		self.NN = 0
 
 	def build_incidence(self, Variabs):
 		"""
+		build_incidence builds the incidence matrix DM
+		
+		inputs:
+		Variabs - variables class
+
+		outputs:
+		EI         - np.array, node number on 1st side of all edges
+		EJ         - np.array, node number on 2nd side of all edges
+		EIEJ_plots - np.array, combined EI and EJ, each line is two nodes of edge, for visual ease
+		DM         - np.array, connectivity matrix NE X NN
+		NE         - int, # edges in network
+		NN         - int, # nodes in network
 		"""
 		self.EI, self.EJ, self.EIEJ_plots, self.DM, self.NE, self.NN = Matrixfuncs.build_incidence(Variabs)
 
@@ -273,7 +318,9 @@ class Net_structure:
 
 
 class Net_state:
-	"""docstring for Net_state"""
+	"""
+	Net_state class stores internal info of network state for all time steps
+	"""
 	def __init__(self):
 		super(Net_state, self).__init__()
 		self.K = []
@@ -286,8 +333,12 @@ class Net_state:
 		Builds initial conductivity matrix, simulation steps and updates are under Solve.py
 
 		input:
-		NE    - NEdges, int
-		K_max - value of maximal conductivity (no marble)
+		Variabs - class, user variables
+		Strctr  - class, network structure
+		noise   - str, add noise to initial state of conductivities
+				  'no'     = all marbles in middle
+				  'rand_u' = take randomized flow field and move marbles accordingly
+				  'rand_K' = take randomized flow field, add to solved velocity field under all marbles in middle, then move marbles accordingly
 		
 		output:
 		K     - 1D np.array sized [NEdges] with initial conductivity values for every edge
@@ -295,17 +346,30 @@ class Net_state:
 		"""
 		NE = Strctr.NE
 		K_max = Variabs.K_max
-		frac_moved = 0.0  # fraction of marbles moved, on average
+		frac_moved = 0.15  # fraction of marbles moved, on average
 
 		self.K = K_max*np.ones([NE])
-		self.K_mat = np.eye(NE) * self.K
 
-		if noise == 'yes':
+		if noise == 'rand_u' or noise == 'rand_K':
 			# fictional velocity field just to move marble randomly
-			u_rand = (1+frac_moved) * Variabs.u_thresh * 2 * (rand.random([Strctr.NN])-1/2) 
+			u_rand = (1+frac_moved) * Variabs.u_thresh * 2 * (rand.random([Strctr.NE])-1/2) 
+			u_zeros = np.zeros([Strctr.NE])
+			if noise == 'rand_K':
+				# specific constraints for training step
+				NodeData, Nodes, EdgeData, Edges, GroundNodes = Strctr.Constraints_afo_task(Variabs, 'w marbles', 0)
+
+				# BC and constraints as matrix
+				Cstr_full, Cstr, f = Constraints.ConstraintMatrix(NodeData, Nodes, EdgeData, Edges, GroundNodes, 
+																  Strctr.NN, Strctr.EI, Strctr.EJ)  
+				
+				p_diffusive, u_diffusive = self.solve_flow_const_K(Variabs, Strctr, u_zeros, Cstr, f, Variabs.iterations)
+				u_rand_norm = u_rand / Variabs.u_thresh * np.mean(np.abs(u_diffusive))
+				u_rand = u_rand_norm + u_diffusive
 			self.K = Matrixfuncs.ChangeKFromFlow(u_rand, Variabs.u_thresh, self.K, Variabs.NGrid, 
 												K_change_scheme=Variabs.K_scheme, K_max=Variabs.K_max, 
 												K_min=Variabs.K_min)  # move marble, change conductivities
+		
+		self.K_mat = np.eye(NE) * self.K
 
 	def fixAllK(self, Variabs, Strctr):
 		for i in [Strctr.InNodes_full, Strctr.FixedNodes_full, Strctr.GroundNodes_full]:
@@ -317,7 +381,7 @@ class Net_state:
 		for n in nodes.reshape(length):
 			self.K[Strctr.EJ == n] = Variabs.K_max
 
-	def solve_flow_const_K(self, Variabs, Strctr, NET, u, Cstr, f, iters_same_BCs):
+	def solve_flow_const_K(self, Variabs, Strctr, u, Cstr, f, iters_same_BCs):
 		"""
 		Explain function Roie, perhaps don't miss out on it this time
 		"""
@@ -368,17 +432,17 @@ class Net_state:
 
 			if Variabs.K_type == 'flow_dep':
 				# print('solve flow under constant K for the %d time' %l)
-				p, u_nxt = self.solve_flow_const_K(Variabs, Strctr, NET, u, Cstr, f, iters_same_BCs)
+				p, u_nxt = self.solve_flow_const_K(Variabs, Strctr, u, Cstr, f, iters_same_BCs)
 			else:
 				L, L_bar = Matrixfuncs.buildL(Strctr.DM, self.K_mat, Cstr, Strctr.NN)  # Lagrangian
 
 				p, u_nxt = Solve.Solve_flow(L_bar, Strctr.EI, Strctr.EJ, self.K, f)  # pressure and flow
 
-			# NETfuncs.PlotNetwork(p, u_nxt, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE, 
-			# 					nodes='yes', edges='no', savefig='no')
-			# NETfuncs.PlotNetwork(p, u_nxt, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE, 
-			# 					nodes='no', edges='yes', savefig='no')
-			# plt.show()
+			NETfuncs.PlotNetwork(p, u_nxt, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE, 
+								nodes='yes', edges='no', savefig='no')
+			NETfuncs.PlotNetwork(p, u_nxt, self.K, NET.NET, NET.pos_lattice, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE, 
+								nodes='no', edges='yes', savefig='no')
+			plt.show()
 
 			# if sim_type == 'w marbles' or sim_type == 'allostery test':  # Update conductivities
 			if sim_type == 'w marbles':  # Update conductivities
@@ -468,11 +532,9 @@ class Net_state:
 			# specific constraints for training step
 			NodeData, Nodes, EdgeData, Edges, GroundNodes = Strctr.Constraints_afo_task(Variabs, sim_type, i)
 
-			# print(Variabs.input_p)
-
 			# BC and constraints as matrix
 			Cstr_full, Cstr, f = Constraints.ConstraintMatrix(NodeData, Nodes, EdgeData, Edges, GroundNodes, 
-															Strctr.NN, Strctr.EI, Strctr.EJ)  
+															  Strctr.NN, Strctr.EI, Strctr.EJ)  
 
 			# Build Lagrangians and solve flow, optionally update conductivities and repeat.
 			u = np.zeros([Strctr.NE,])

@@ -175,7 +175,7 @@ def ChangeKFromFlow(u, thresh, K, NGrid, K_change_scheme='marbles', K_max=1, K_m
         R_max = K_min ** (-1)
         R_nxt = R + beta * u ** 2 / u_sqrd_mean * (R_max - R) / R_max
         K_nxt = R_nxt ** (-1)
-    elif K_change_scheme == 'marbles' or K_change_scheme == 'marbles_pressure':    
+    elif K_change_scheme == 'marbles_u' or K_change_scheme == 'marbles_pressure':    
         NCells = NGrid*NGrid  # total number of cells in network
         for i in range(NCells):  # change K's in every cell separately
             u_sub = u[4*i:4*(i+1)]  # velocities at particular cell
@@ -207,7 +207,7 @@ def ChangeKFromFlow_singleCell(u, thresh, K, K_max, K_min, K_change_scheme):
         p_thresh = thresh / K_max  # pressure difference threshold to move marble
         u_in_ind = np.where(delta_p>p_thresh)[0]  # all indices where u enters the cell at velocity greater than threshold to move marble
         u_out_ind = np.where(delta_p==min(delta_p.T))[0]  # indices of minimal flow, possibly exiting the cell
-    elif K_change_scheme == 'marbles':  # marbles move due to flow u
+    elif K_change_scheme == 'marbles_u':  # marbles move due to flow u
         u_in_ind = np.where(u>thresh)[0]  # all indices where u enters the cell at velocity greater than threshold to move marble
         u_out_ind = np.where(u==min(u.T))[0]  # indices if minimal flow, possibly exiting the cell
 
