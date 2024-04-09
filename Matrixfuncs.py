@@ -22,14 +22,11 @@ def buildL(DM, K_mat, Cstr, NN):
     L     - Shortened Lagrangian np.array cubic array sized [NNodes]
     L_bar - Full  augmented Lagrangian, np.array cubic array sized [NNodes + Constraints]
     """
-    
     L = np.dot(DM.T, np.dot(K_mat, DM))
     L_bar = zeros([NN + len(Cstr), NN + len(Cstr)])
     L_bar[NN:,:NN] = Cstr  # the bottom most rows of augmented L are the constraints
     L_bar[:NN,NN:] = Cstr.T  # the rightmost columns of augmented L are the constraints
     L_bar[:NN,:NN] = L  # The topmost and leftmost part of augmented L are the basic L
-    # shapeL = np.shape(L_bar)
-    # print('size of L is %d over %d' %(shapeL[0], shapeL[1]))
     return L, L_bar
   
   
@@ -38,7 +35,7 @@ def build_incidence(Variabs):
     Builds incidence matrix DM as np.array [NEdges, NNodes]
     its meaning is 1 at input node and -1 at outpus for every row which resembles one edge.
 
-    input:
+    input (extracted from Variabs input):
     a        - N cells in vertical direction of lattice, int
     b        - N cells in horizontal direction of lattice, int
     typ      - type of lattice (Nachi style or mine) str
@@ -57,7 +54,7 @@ def build_incidence(Variabs):
     typ = Variabs.net_typ
     Periodic = Variabs.Periodic
 
-    if typ == 'Cells':
+    if typ == 'Cells':  # Roie style
         
         NN = 5*a*a  # 5 nodes in every cell 
 
@@ -84,7 +81,7 @@ def build_incidence(Variabs):
             EJ.append(5*(a-1)*a + 5*j + 5)
 
 
-    elif typ == 'Nachi':
+    elif typ == 'Nachi':  # Nachi style
         
         NN = a*b # + 1
         
@@ -149,24 +146,25 @@ def build_incidence(Variabs):
     return EI, EJ, EIEJ_plots, DM, NE, NN
 
 
-def ChangeKFromFlow(u, thresh, K, NGrid, K_change_scheme='marbles', K_max=1, K_min=0.5, beta=0.0):
+def ChangeKFromFlow(u, thresh, K, NGrid, K_change_scheme='marbles_pressure', K_max=1, K_min=0.5, beta=0.0):
     """
     Change conductivities of full network given velocities
     This is done by dividing the network into cells
     and changing the K's cell by cell
 
     input:
-    u      - [NEdges, 1] array of flow through edges
-    thresh - threshold of velocity that moves the marble and changes K, float
-    K      - [NEdges] 2D cubic np.array of conductivities
-    K_max  - value of maximal conductivity
-    K_min  - value of minimal conductivity
-    NGrid  - number of cells at each side of the network
-
+    u               - [NEdges, 1] array of flow through edges
+    thresh          - threshold of velocity that moves the marble and changes K, float
+    K               - [NEdges] 2D cubic np.array of conductivities
+    NGrid           - number of cells at each side of the network
+    K_change_scheme - str, scheme for how to change conductivities due to u or p. default='marbles'
+    K_max           - float, value of maximal conductivity, default=1
+    K_min           - float, value of minimal conductivity, default=0.5
+    beta            - float, vaule for conductivity change proportional to velocity squared, default=0.0
+    
     output:
     K_nxt - [NEdges] 2D cubic np.array of conductivities for next iteration
     """
-
     K_nxt = copy.copy(K)
 
     if K_change_scheme == 'propto_current_squared':
@@ -182,9 +180,7 @@ def ChangeKFromFlow(u, thresh, K, NGrid, K_change_scheme='marbles', K_max=1, K_m
             K_sub = K[4*i:4*(i+1)]  # conductivities at particular cell
             K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, thresh, K_sub, K_max, K_min, K_change_scheme)  # change K's at particular cell
             K_nxt[4*i:4*(i+1)] = K_sub_nxt  # put them in the right place at K_nxt
-
     return K_nxt
-
 
 def ChangeKFromFlow_singleCell(u, thresh, K, K_max, K_min, K_change_scheme):
     """
@@ -197,6 +193,7 @@ def ChangeKFromFlow_singleCell(u, thresh, K, K_max, K_min, K_change_scheme):
     K      - 2D cubic array of conductivities with 4 elements on diag
     K_max  - value of maximal conductivity
     K_min  - value of minimal conductivity
+    K_change_scheme - str, scheme for how to change conductivities due to u or p. default='marbles_pressure'
 
     output:
     K_nxt - 2D cubic array of conductivities with 4 elements on diag for next iteration
@@ -229,6 +226,15 @@ def ChangeKFromFlow_singleCell(u, thresh, K, K_max, K_min, K_change_scheme):
 
 def K_by_cells(K, K_min, NGrid):
     """
+    K_by_cells find location of marble at each cell
+
+    inputs:
+    K     - 1D array of conductivities
+    K_min - float, minimal conductivity. This is where a marble is at.
+    NGrid - number of cells in network is NGrid X NGrid
+
+    outputs:
+    K_cells - 2D array sized [# cells, iters] with positions of marbles in each cell (0=middle, 1=left, 2=bot, 3=right, 4=top)
     """
     K_cells = np.zeros([NGrid**2, ])
     for i in range(NGrid**2):

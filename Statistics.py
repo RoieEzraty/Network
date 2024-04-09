@@ -84,3 +84,49 @@ def shear_type(u):
 	return shear_type
     
     # shear_type = np.array([u_demean_norm[0,0], u_demean_norm[1,1]])
+
+def curl_direction(u, NGrid):
+	"""
+	curl_direction calculates the curl of u, edges sorted as in Roie's network design
+	curl>0 --> counter-clockwise
+
+	inputs:
+	u     - 1D array [NE+constaints, ] of flow field after flowing from both inputs to both outputs
+	NGrid - int, # cells in each row (and col) of network
+	
+	outputs:
+	curl (w) - float, the normalized vorticity of the flow in the whole network, indicative of amount of learning
+			   curl>0 --> counter-clockwise
+	"""
+	u_by_cells = np.zeros([NGrid*NGrid,2])  # initialize array 2D value of velocity at every cell
+	for i in range(NGrid*NGrid):
+	    u_by_cells[i,0] = (u[4*i]+(-u[4*i+2]))/2  # ux
+	    u_by_cells[i,1] = (u[4*i+1]+(-u[4*i+3]))/2  # uy
+
+	u_by_cells = np.reshape(u_by_cells, [NGrid, NGrid, 2])  # reshape as net
+	u_by_cells_mag = np.sqrt(u_by_cells[:,:,0]**2+u_by_cells[:,:,1]**2)
+
+	dxuy = np.append(np.diff(u_by_cells[:,:,1],axis=1).T, [np.diff(u_by_cells[:,:,1],axis=1)[:,-1]], axis=0).T  # d/dx(uy)
+	dyux = np.append(np.diff(u_by_cells[:,:,0],axis=0), [np.diff(u_by_cells[:,:,0],axis=0)[-1,:]], axis=0)  # d/dy(ux)
+	curl = dxuy-dyux
+	# u_mean = np.mean(u_by_cells_mag)
+	u_mean = 1
+	curl_norm = curl/u_mean
+	return np.mean(np.mean(curl_norm))
+
+def p_mat(p, NGrid):
+	"""
+	p_mat calculates the average p in each cell from State.p 1D array from nodes sorted as in Roie's network design.
+
+	inputs:
+	p     - 1D array [NN+constaints, ] of hydrostatic pressure values
+	NGrid - int, # cells in each row (and col) of network
+	
+	outputs:
+	p_mat - 2D array [NGrid, NGrid] pressure in each cell as matrix
+	"""
+	p_mat = np.zeros([NGrid*NGrid, ])  # initialize array 2D value of velocity at every cell
+	for i in range(NGrid*NGrid):
+	    p_mat[i] = np.mean(p[5*i:5*(i+1)])
+	p_mat = np.reshape(p_mat, [NGrid, NGrid])  # reshape as net
+	return p_mat

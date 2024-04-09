@@ -7,6 +7,7 @@ from datetime import datetime
 import networkx as nx
 import matplotlib.pyplot as plt
 
+import Statistics
 
 def buildNetwork(EIEJ_plots):
     """
@@ -26,7 +27,7 @@ def buildNetwork(EIEJ_plots):
     return NET
 
  
-def plotNetStructure(NET, layout='Cells', plot='no'):
+def plotNetStructure(NET, layout='Cells', plot='no', node_labels=True):
     """
     Plots the structure (nodes and edges) of networkx NET 
     
@@ -59,14 +60,14 @@ def plotNetStructure(NET, layout='Cells', plot='no'):
         pos_lattice = nx.spectral_layout(NET)
 
     if plot == 'yes':
-        nx.draw_networkx(NET, pos_lattice)
+        nx.draw_networkx(NET, pos_lattice, edge_color='b', node_color='b', with_labels=node_labels)
         plt.show()
         
     print('NET is ready')
     return pos_lattice
 
 
-def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE, nodes='yes', edges='yes', savefig='no'):
+def PlotNetwork(p, u, K, BigClass, EIEJ_plots, NN, NE, nodes='yes', edges='yes', pressureSurf='no', savefig='no'):
     """
     Plots the flow network structure alongside hydrostatic pressure, flows and conductivities
     pressure denoted by colors from purple (high) to cyan (low)
@@ -83,10 +84,13 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE, nodes='yes', edge
     output:
     matplotlib plot of network structure
     """
+    NET = BigClass.NET.NET
+    pos_lattice = BigClass.NET.pos_lattice
 
     # Preliminaries for the plot
-    node_sizes = 24
-    IO_node_sizes = 42
+    # node_sizes = 24
+    node_sizes = 8*24
+    # IO_node_sizes = 42
     u_rescale_factor = 5
     
     # p values at nodes - the same in EIEJ and in networkx's NET
@@ -111,13 +115,15 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE, nodes='yes', edge
 #                     for edge in NET.edges()]
     # black_edges = [edge for edge in NET.edges() if edge not in red_edges]
     
-    low_K_NET_inds = np.where(K_NET==min(K_NET))[0]  # indices of edges with low conductivity
-    high_K_NET_inds = np.where(K_NET!=min(K_NET))[0]  # indices of edges with higher conductivity
+    # low_K_NET_inds = np.where(K_NET==min(K_NET))[0]  # indices of edges with low conductivity
+    # high_K_NET_inds = np.where(K_NET!=min(K_NET))[0]  # indices of edges with higher conductivity
+    low_K_NET_inds = np.where(K_NET!=max(K_NET))[0]  # indices of edges with low conductivity
+    high_K_NET_inds = np.where(K_NET==max(K_NET))[0]  # indices of edges with higher conductivity
     positive_u_NET_inds = np.where(u_NET>10**-10)[0]  # indices of edges with positive flow vel
     negative_u_NET_inds = np.where(u_NET<-10**-10)[0]  # indices of edges with negative flow vel
     
-    k_edges_positive = [NETEdges[i] for i in list(set(low_K_NET_inds) & set(positive_u_NET_inds))]  # edges with low conductivity, positive flow
-    k_edges_negative = [NETEdges[i] for i in list(set(low_K_NET_inds) & set(negative_u_NET_inds))]  # edges with low conductivity, negative flow
+    r_edges_positive = [NETEdges[i] for i in list(set(low_K_NET_inds) & set(positive_u_NET_inds))]  # edges with low conductivity, positive flow
+    r_edges_negative = [NETEdges[i] for i in list(set(low_K_NET_inds) & set(negative_u_NET_inds))]  # edges with low conductivity, negative flow
     b_edges_positive = [NETEdges[i] for i in list(set(high_K_NET_inds) & set(positive_u_NET_inds))]  # edges with high conductivity, positive flow
     b_edges_negative = [NETEdges[i] for i in list(set(high_K_NET_inds) & set(negative_u_NET_inds))]  # edges with high conductivity, negative flow
 
@@ -131,6 +137,16 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE, nodes='yes', edge
     edgewidths_b_positive = rescaled_u_NET[list(set(high_K_NET_inds) & set(positive_u_NET_inds))]
     edgewidths_b_negative = rescaled_u_NET[list(set(high_K_NET_inds) & set(negative_u_NET_inds))]
 
+    if pressureSurf == 'yes':
+        figsize = 5*BigClass.Variabs.NGrid
+        p_mat = Statistics.p_mat(p, BigClass.Variabs.NGrid)
+        X = np.arange(0, figsize, figsize/np.shape(p_mat)[0])
+        Y = np.arange(0, figsize, figsize/np.shape(p_mat)[1])
+        X, Y = np.meshgrid(X, Y)
+
+        # Plot the surface.
+        plt.contourf(X, Y, p_mat, cmap=plt.cm.cool,
+                     linewidth=0, antialiased=False)
 
     # Need to create a layout when doing
     # separate calls to draw nodes and edges
@@ -143,20 +159,31 @@ def PlotNetwork(p, u, K, NET, pos_lattice, EIEJ_plots, NN, NE, nodes='yes', edge
         # draw with right arrow widths ("width") and directions ("arrowstyle")
         # nx.draw_networkx_nodes(NET, pos_lattice, cmap=plt.get_cmap('binary'), 
         #                         node_color = purple_values, node_size = IO_node_sizes)
-        nx.draw_networkx_edges(NET, pos_lattice, edgelist=k_edges_positive, edge_color='r', arrows=True, width=edgewidths_k_positive,
-                               arrowstyle='-|>')
-        nx.draw_networkx_edges(NET, pos_lattice, edgelist=k_edges_negative, edge_color='r', arrows=True, width=edgewidths_k_negative,
-                               arrowstyle='<|-')
-        nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_positive, edge_color='b', arrows=True, width=edgewidths_b_positive,
-                               arrowstyle='-|>')
-        nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_negative, edge_color='b', arrows=True, width=edgewidths_b_negative,
-                               arrowstyle='<|-')
-
+        # nx.draw_networkx_edges(NET, pos_lattice, edgelist=r_edges_positive, edge_color='r', arrows=True, width=edgewidths_k_positive,
+        #                        arrowstyle='-|>')
+        # nx.draw_networkx_edges(NET, pos_lattice, edgelist=r_edges_negative, edge_color='r', arrows=True, width=edgewidths_k_negative,
+        #                        arrowstyle='<|-')
+        # nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_positive, edge_color='b', arrows=True, width=edgewidths_b_positive,
+        #                        arrowstyle='-|>')
+        # nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_negative, edge_color='b', arrows=True, width=edgewidths_b_negative,
+        #                        arrowstyle='<|-')
+        nx.draw_networkx_edges(NET, pos_lattice, edgelist=r_edges_positive, edge_color='r', arrows=True, width=edgewidths_k_positive,
+                               arrowstyle='->')
+        nx.draw_networkx_edges(NET, pos_lattice, edgelist=r_edges_negative, edge_color='r', arrows=True, width=edgewidths_k_negative,
+                               arrowstyle='<-')
+        nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_positive, edge_color='k', arrows=True, width=edgewidths_b_positive,
+                               arrowstyle='->')
+        nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_negative, edge_color='k', arrows=True, width=edgewidths_b_negative,
+                               arrowstyle='<-')
     if savefig=='yes':
         # prelims for figures
-        # comp_path = "C:\\Users\\SMR_Admin\\OneDrive - huji.ac.il\\PhD\\Network Simulation repo\\figs and data\\"
-        comp_path = "C:\\Users\\roiee\\OneDrive - huji.ac.il\\PhD\\Network Simulation repo\\figs and data\\"
+        comp_path = "C:\\Users\\SMR_Admin\\OneDrive - huji.ac.il\\PhD\\Network Simulation repo\\figs and data\\"
+        # comp_path = "C:\\Users\\roiee\\OneDrive - huji.ac.il\\PhD\\Network Simulation repo\\figs and data\\"
         datenow = datetime.today().strftime('%Y_%m_%d_%H_%M_%S')
         plt.savefig(comp_path + 'network_' + str(datenow) + '.png', bbox_s='tight')
 
     plt.show()
+
+def PlotPressureContours(BigClass, p):
+    p_mat = Statistics.p_mat(p, BigClass.Variabs.NGrid)
+    return p_mat
