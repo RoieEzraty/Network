@@ -6,7 +6,7 @@ from numpy import arange as arange
 from numpy import zeros as zeros
  
  
-def buildL(DM, K_mat, Cstr, NN):
+def buildL(BigClass, DM, K_mat, Cstr, NN):
     """
     Builds expanded Lagrangian with constraints 
     as in the Methods section of Rocks and Katifori 2018 (https://www.pnas.org/cgi/doi/10.1073/pnas.1806790116)
@@ -22,7 +22,7 @@ def buildL(DM, K_mat, Cstr, NN):
     L     - Shortened Lagrangian np.array cubic array sized [NNodes]
     L_bar - Full  augmented Lagrangian, np.array cubic array sized [NNodes + Constraints]
     """
-    L = np.dot(DM.T, np.dot(K_mat, DM))
+    L = BigClass.Solver.solve.dot_triple(DM.T, K_mat, DM)
     L_bar = zeros([NN + len(Cstr), NN + len(Cstr)])
     L_bar[NN:,:NN] = Cstr  # the bottom most rows of augmented L are the constraints
     L_bar[:NN,NN:] = Cstr.T  # the rightmost columns of augmented L are the constraints
@@ -80,25 +80,7 @@ def build_incidence(Variabs):
             EI.append(5*(a-1)*a + 5*j + 2)
             EJ.append(5*(a-1)*a + 5*j + 5)
 
-    elif typ == 'oneCol':
 
-        NN = 5*a  # 5 nodes in every cell 
-
-        EI = []
-        EJ = []
-
-        # The cells individually
-        for i in range(a):
-            for j in range(4):
-                EI.append(5*i+j)
-                EJ.append(5*i+4)
-
-        # Connecting them
-    
-        for j in range(a-1):
-            EI.append(5*j + 3)
-            EJ.append(5*(j+1) + 1)
-        
     elif typ == 'Nachi':  # Nachi style
         
         NN = a*b # + 1
@@ -192,8 +174,7 @@ def ChangeKFromFlow(u, thresh, K, NGrid, K_change_scheme='marbles_pressure', K_m
         R_nxt = R + beta * u ** 2 / u_sqrd_mean * (R_max - R) / R_max
         K_nxt = R_nxt ** (-1)
     elif K_change_scheme == 'marbles_u' or K_change_scheme == 'marbles_pressure':    
-        # NCells = NGrid*NGrid  # total number of cells in network
-        NCells = int(len(K_nxt)/4)  # total number of cells in network
+        NCells = NGrid*NGrid  # total number of cells in network
         for i in range(NCells):  # change K's in every cell separately
             u_sub = u[4*i:4*(i+1)]  # velocities at particular cell
             K_sub = K[4*i:4*(i+1)]  # conductivities at particular cell
