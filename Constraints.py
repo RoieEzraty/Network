@@ -72,21 +72,23 @@ def build_input_output_and_fixed(task_type, row, NGrid):
                                     test from input to output
                 'Channeling_straight' = 1st from input to output on same column, then from output to 2 perpindicular nodes. 
                                         test from input to output (same as 1st)
+                'Counter' = column of cells bottomost and topmost nodes are input/output (switching), 
+                            rightmost nodes (1 each row) ground. more about the task in "_counter.ipynb".
     row       - int, # of row (and column) of cell in network from which input and output are considered
     NGrid     - int, row dimension of cells in network
 
     outputs:
     input_output_pairs - np.array of input and output node pairs. State.flow_iterate() will know how to handle them.
-    fixed_node_pairs   - np.array of nodes with fixed values, for 'XOR' task. default=0
+    fixed_nodes        - np.array of nodes with fixed values, for 'XOR' task. default=0
     """
     if task_type == 'Allostery' or task_type == 'XOR' or task_type=='Flow_clockwise':
         input_output_pairs = np.array([[(row*NGrid+(row+1))*5-1, (NGrid*(NGrid-(row+1))+(row+1))*5-1], 
                                       [(NGrid*(NGrid-row)-row)*5-1, ((row+1)*NGrid-row)*5-1]])
         if task_type == 'XOR':
-            fixed_node_pairs = np.array([[(NGrid*int(np.floor(NGrid/2))+2)*5-1],
-                                         [(NGrid*int(np.floor(NGrid/2))+(NGrid-row))*5-1]])
+            fixed_nodes = np.array([(NGrid*int(np.floor(NGrid/2))+2)*5-1,
+                                         (NGrid*int(np.floor(NGrid/2))+(NGrid-row))*5-1])
         else:
-            fixed_node_pairs = np.array([])
+            fixed_nodes = np.array([])
     elif task_type == 'Channeling_diag' or task_type=='Channeling_straight':
         n_every_row = 3  # divide into 2 rows of n_every_row inputs/outputs
         from_node = 0  # input column
@@ -102,13 +104,16 @@ def build_input_output_and_fixed(task_type, row, NGrid):
             input_output_pairs = array([[input_output_pairs[0, from_node], input_output_pairs[1, from_node]], 
                                        [input_output_pairs[0, to_node], input_output_pairs[1, to_node]]])
                 
-        fixed_node_pairs = np.array([])
-    else:
+        fixed_nodes = np.array([])
+    elif task_type == 'Counter':
+        input_output_pairs = np.array([[4, NGrid*5-1], [NGrid*5-1, 4]])
+        fixed_nodes = np.array([np.linspace(7, (NGrid-1)*5+2, NGrid-1, dtype=int)])
+    elif task_type == 'Allostery_one_pair': 
         input_output_pairs = np.array([[(row*NGrid+int(np.ceil(NGrid/2)))*5-1, 
                                         (NGrid*(NGrid-(row+1))+int(np.ceil(NGrid/2)))*5-1], 
                                       [(row*NGrid+int(np.ceil(NGrid/2)))*5-1, 
                                         (NGrid*(NGrid-(row+1))+int(np.ceil(NGrid/2)))*5-1]])
-        fixed_node_pairs = np.array([])
+        fixed_nodes = np.array([])
 
-    return input_output_pairs, fixed_node_pairs
+    return input_output_pairs, fixed_nodes
 

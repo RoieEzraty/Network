@@ -28,6 +28,10 @@ class User_variables:
 						 'XOR'                = 2 inputs and 2 outputs. difference between output nodes encodes the XOR result of the 2 inputs
 						 'Channeling_diag'    = 1st from input to diagonal output, then from output to 2 perpindicular nodes. 
                                                 test from input to output
+                         'Channeling_straight' = 1st from input to output on same column, then from output to 2 perpindicular nodes. 
+                                                 test from input to output (same as 1st)
+                		 'Counter' = column of cells bottomost and topmost nodes are input/output (switching), 
+                                     rightmost nodes (1 each row) ground. more about the task in "_counter.ipynb".
 	K_scheme           - str, scheme to change conductivities
 						 'propto_current_squared' = conductivity on edge changes due to squared on edge (use beta argument), no marbles involves
 						 'marbles_pressure'       = conductivities in each cells change due to marbles moving due to pressure difference.
@@ -44,14 +48,14 @@ class User_variables:
 	                     'Cells' is Roie's style of network and is default
 	                     'Nachi' is Nachi style
 	u_thresh           - float, threshold to move marbles, default=1
-	fixed_node_pairs   - 1D array, numbers the nodes with fixed value assigned by fixed_node_p() function, for 'XOR' task, default=0
+	fixed_nodes        - 1D array, numbers the nodes with fixed value assigned by fixed_node_p() function, for 'XOR' task, default=0
 	K_max              - default=1
 	K_min              - default=0.5
 	beta               - default=0.0
 	"""
 
 	def __init__(self, NGrid, input_p, flow_scheme, task_type, K_scheme, K_type, iterations, input_output_pairs, 
-		         Periodic='False', net_typ='Cells', u_thresh=1, fixed_node_pairs=0, K_max=1, K_min=0.5, beta=0.0):
+		         Periodic='False', net_typ='Cells', u_thresh=1, fixed_nodes=0, K_max=1, K_min=0.5, beta=0.0):
 		self.NGrid = NGrid		
 		if len(input_p)==1:
 			self.input_p = input_p
@@ -66,10 +70,10 @@ class User_variables:
 			self.circle_step = 1
 
 		self.task_type = task_type
-		if task_type == 'XOR':
-			self.fixed_node_pairs = fixed_node_pairs
+		if task_type == 'XOR' or 'Counter':
+			self.fixed_nodes = fixed_nodes
 		else: 
-			self.fixed_node_pairs = np.array([])
+			self.fixed_nodes = np.array([])
 
 		self.iterations = iterations
 		self.input_output_pairs = input_output_pairs
@@ -106,7 +110,9 @@ class User_variables:
 		fixed_node_p = 1D numpy array [2, ], hydro. pressure on fixed nodes
 		"""
 		if self.task_type == 'XOR':
-			self.fixed_node_p = np.array([[p/3], [2*p/3]])
+			self.fixed_node_p = np.array([p/3, 2*p/3])
+		elif self.task_type == 'Counter':
+			self.fixed_node_p = np.ones([self.NGrid, ])*p
 		else:
 			self.fixed_node_p = np.array([])
 			print('no fixed nodes other than input')
@@ -149,16 +155,25 @@ class Net_structure:
 		EdgesTotal - 2D array sized [???, 2], all edges connecting cells in network
 		"""
 		NGrid = BigClass.Variabs.NGrid
-		NConnections = int(NGrid*(NGrid-1)*2)  # connections between cells
-		EdgesConnections = [int(i) for i in range(self.NE-NConnections, self.NE)]  # enumerate all number from NConnections to NE
+		if BigClass.Variabs.task_type == 'Counter':
+			NConnections = int(NGrid-1)
+			left_side = [0 + 4*i for i in range(NGrid)]  # enumerate leftmost edges in network
+			bottom_side = [1]  # enumerate bottommost edge in network
+			right_side = []  # right side is ground so no need to treat as boundary
+			top_side = [4*NGrid-1]  # enumerate topmost edges in network
+			EdgesBounaries = np.append(left_side, np.append(bottom_side, top_side))
+		else:
+			NConnections = int(NGrid*(NGrid-1)*2)  # connections between cells
 
-		NBoundaries = NGrid*4  # # of cell boundaries
-		left_side = [0 + 4*NGrid*i for i in range(NGrid)]  # enumerate leftmost edges in network
-		bottom_side = [1 + 4*i for i in range(NGrid)]  # enumerate bottommost edges in network
-		right_side = [2 + 4*(NGrid-1) + 4*NGrid*i for i in range(NGrid)]  # enumerate rightmost edges in network
-		top_side = [4*NGrid*(NGrid-1) + 3 + 4*i for i in range(NGrid)]  # enumerate topmost edges in network
+			left_side = [0 + 4*NGrid*i for i in range(NGrid)]  # enumerate leftmost edges in network
+			bottom_side = [1 + 4*i for i in range(NGrid)]  # enumerate bottommost edges in network
+			right_side = [2 + 4*(NGrid-1) + 4*NGrid*i for i in range(NGrid)]  # enumerate rightmost edges in network
+			top_side = [4*NGrid*(NGrid-1) + 3 + 4*i for i in range(NGrid)]  # enumerate topmost edges in network
+			EdgesBounaries = np.append(left_side, np.append(bottom_side, np.append(right_side, top_side)))
+		
 		# connect them all
-		EdgesBounaries = np.append(left_side, np.append(bottom_side, np.append(right_side, top_side)))
+		EdgesConnections = [int(i) for i in range(self.NE-NConnections, self.NE)]  # enumerate all number from NConnections to NE
+		
 		self.EdgesTotal = np.append(EdgesConnections, EdgesBounaries)
 
 	def Setup_constraints(self, BigClass):
@@ -167,7 +182,7 @@ class Net_structure:
 
 		inputs:
 		input_output_pairs - np.array of input and output node pairs. State.flow_iterate() will know how to handle them.
-		fixed_node_pairs   - 1D array, numbers the nodes with fixed value assigned by fixed_node_p() function, for 'XOR' task, default=0
+		fixed_nodes   - 1D array, numbers the nodes with fixed value assigned by fixed_node_p() function, for 'XOR' task, default=0
 		input_p            - float, B.C. pressure at input node
 
 		outputs:
@@ -184,22 +199,24 @@ class Net_structure:
 		"""
 		# dummy variab for ease
 		in_out_pairs = copy.copy(BigClass.Variabs.input_output_pairs)
-		fixed_pairs = copy.copy(BigClass.Variabs.fixed_node_pairs)
+		fixed_nodes = copy.copy(BigClass.Variabs.fixed_nodes)
+		len_in_out_pairs = np.shape(in_out_pairs)[1]
+		len_fixed = np.shape(fixed_nodes)[1]
 
 		InNodeData_full = np.array([[BigClass.Variabs.input_p], [BigClass.Variabs.input_p]])  # input p value
 		# input p node
-		InNodes_full = np.array([[in_out_pairs[i, 0]] for i in range(len(in_out_pairs))])  
+		InNodes_full = np.array([[in_out_pairs[i, 0]] for i in range(len_in_out_pairs)])  
 		# if fixed nodes exist, use them:
-		if len(fixed_pairs)>0:
-			FixedNodeData_full = np.array([[BigClass.Variabs.fixed_node_p[0]], [BigClass.Variabs.fixed_node_p[1]]])  # input p value
+		if len(fixed_nodes)>0:
+			FixedNodeData_full = np.array([BigClass.Variabs.fixed_node_p[i] for i in range(len_fixed)])  # input p value
 			# input p node
-			FixedNodes_full = np.array([[fixed_pairs[i, 0]] for i in range(len(fixed_pairs))])  
+			FixedNodes_full = np.array([fixed_nodes[0, i] for i in range(len_fixed)])  
 		else:
 			FixedNodeData_full = np.array([])
 			FixedNodes_full = np.array([])
 
 		# nodes with zero pressure
-		GroundNodes_full = np.array([[in_out_pairs[i, 1]] for i in range(len(in_out_pairs))])  
+		GroundNodes_full = np.array([[in_out_pairs[i, 1]] for i in range(len_in_out_pairs)])  
 		GroundNodes_full_Allostery = np.array([GroundNodes_full[i][0] for i in range(len(GroundNodes_full))])
 
 		EdgeData_full = np.array([[0], [0]])  # pressure drop value on edges specified by Edges_full
@@ -300,8 +317,8 @@ class Net_structure:
 			# select random input and output
 			m = np.where([rand.randint(0, 2), rand.randint(0, 2)])[0]
 
-			NodeData = self.InNodeData_full[m]
-			Nodes = self.InNodes_full[m] 
+			NodeData = np.append(self.InNodeData_full[m], self.FixedNodeData_full)
+			Nodes = np.append(self.InNodes_full[m], self.FixedNodes_full)
 			EdgeData = self.EdgeData_full[m]
 			Edges = self.Edges_full[m]
 			GroundNodes = self.GroundNodes_full[m]
@@ -324,6 +341,16 @@ class Net_structure:
 				EdgeData = self.EdgeData_full[1]
 				Edges = self.Edges_full[1]
 				GroundNodes = BigClass.Variabs.input_output_pairs[1, :]
+
+		elif task_type == 'Counter':
+			m = i % 2  # iterate between 1st and 2nd inputs 
+
+			# Determine boundary conditions - modulus 2 for 'Counter'
+			EdgeData = self.EdgeData_full[m]
+			Edges = self.Edges_full[m]
+			NodeData = np.append(self.InNodeData_full[m], self.FixedNodeData_full)
+			Nodes = np.append(self.InNodes_full[m], self.FixedNodes_full)
+			GroundNodes = self.GroundNodes_full[m]
 
 		return NodeData, Nodes, EdgeData, Edges, GroundNodes
 
@@ -410,7 +437,11 @@ class Net_state:
 		self.K_mat = np.eye(NE) * self.K  # save as matrix
 
 	def fixAllK(self, BigClass):
-		for i in [BigClass.Strctr.InNodes_full, BigClass.Strctr.FixedNodes_full, BigClass.Strctr.GroundNodes_full]:
+		if BigClass.Variabs.task_type == 'Counter':  # for counter task, allow marble to get stuck at boundary edge (not input or output)
+			bc_nodes_full = [BigClass.Strctr.InNodes_full,  BigClass.Strctr.GroundNodes_full]
+		else:  # for all other tasks, no marbles to get stuck at boundary edge
+			bc_nodes_full = [BigClass.Strctr.InNodes_full, BigClass.Strctr.FixedNodes_full, BigClass.Strctr.GroundNodes_full]
+		for i in bc_nodes_full:
 			length = len(i)
 			self.fixK(BigClass, i, length)
 		self.K_mat = np.eye(BigClass.Strctr.NE) * self.K
@@ -615,7 +646,7 @@ class Net_state:
 				# NETfuncs.PlotNetwork(p, u, self.K, BigClass, EIEJ_plots, NN, NE, 
 				# 					nodes='yes', edges='no', savefig=savefig)
 				NETfuncs.PlotNetwork(p, u, self.K, BigClass, EIEJ_plots, NN, NE, 
-									nodes='no', edges='yes', pressureSurf='yes', savefig=savefig)
+									nodes='yes', edges='yes', pressureSurf='yes', savefig=savefig)
 				plt.show()
 
 			# plot if convergence reached before iters # of iterations
@@ -688,17 +719,22 @@ class Networkx_net:
 
 	def buildNetwork(self, BigClass):
 		"""
-		buildNetwork build a networkx network
+	    Builds a networkx network using edges from EIEJ_plots which are built upon EI and EJ at "Matrixfuncs.py"
+	    After this step, the order of edges at EIEJ_plots and in the networkx net is not the same which is shit
+	    
+	    input:
+	    EIEJ_plots - 2D np.array sized [NE, 2] - 
+	                 EIEJ_plots[i,0] and EIEJ_plots[i,1] are input and output nodes to edge i, respectively
+	    
+	    output:
+	    NET - networkx network containing just the edges from EIEJ_plots
+	    """
+		EIEJ_plots = BigClass.Strctr.EIEJ_plots
+		NET = nx.DiGraph()  # initiate graph object
+		NET.add_edges_from(EIEJ_plots)  # add edges 
+		self.NET = NET
 
-		inputs:
-		EIEJ_plots - np.array, combined EI and EJ, each line is two nodes of edge, for visual ease
-
-		outputs:
-		NET - networkx net object
-		"""
-		self.NET = NETfuncs.buildNetwork(BigClass.Strctr.EIEJ_plots)
-	
-	def build_pos_lattice(self, BigClass):
+	def build_pos_lattice(self, BigClass, plot='no'):
 		"""
 		build_pos_lattice builds the lattice of positions of edges and nodes
 
@@ -710,4 +746,4 @@ class Networkx_net:
 	    outputs:
 	    pos_lattice - dict, positions of nodes from NET.nodes
 		"""
-		self.pos_lattice = NETfuncs.plotNetStructure(self.NET, BigClass.Variabs.net_typ)
+		self.pos_lattice = NETfuncs.plotNetStructure(self.NET, BigClass.Variabs.NGrid, layout=BigClass.Variabs.net_typ, plot=plot)

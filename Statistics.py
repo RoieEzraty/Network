@@ -114,7 +114,7 @@ def curl_direction(u, NGrid):
 	curl_norm = curl/u_mean
 	return np.mean(np.mean(curl_norm))
 
-def p_mat(p, NGrid):
+def p_mat(BigClass, p):
 	"""
 	p_mat calculates the average p in each cell from State.p 1D array from nodes sorted as in Roie's network design.
 
@@ -125,8 +125,16 @@ def p_mat(p, NGrid):
 	outputs:
 	p_mat - 2D array [NGrid, NGrid] pressure in each cell as matrix
 	"""
-	p_mat = np.zeros([NGrid*NGrid, ])  # initialize array 2D value of velocity at every cell
-	for i in range(NGrid*NGrid):
-	    p_mat[i] = np.mean(p[5*i:5*(i+1)])
-	p_mat = np.reshape(p_mat, [NGrid, NGrid])  # reshape as net
+	NGrid = BigClass.Variabs.NGrid
+
+	if BigClass.Variabs.task_type == 'Counter':
+		p_mat = np.zeros([NGrid, ])  # initialize array 2D value of velocity at every cell
+		for i in range(NGrid):
+		    p_mat[i] = np.mean(p[5*i:5*(i+1)])
+		p_mat = np.reshape(np.array([p_mat, p_mat]), (2, NGrid))  # reshape as net
+	else:
+		p_mat = np.zeros([NGrid*NGrid, ])  # initialize array 2D value of velocity at every cell
+		for i in range(NGrid*NGrid):
+		    p_mat[i] = np.mean(p[5*i:5*(i+1)])
+		p_mat = np.reshape(p_mat, [NGrid, NGrid])  # reshape as net
 	return p_mat

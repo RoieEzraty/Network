@@ -9,25 +9,24 @@ import matplotlib.pyplot as plt
 
 import Statistics
 
-def buildNetwork(EIEJ_plots):
-    """
-    Builds a networkx network using edges from EIEJ_plots which are built upon EI and EJ at "Matrixfuncs.py"
-    After this step, the order of edges at EIEJ_plots and in the networkx net is not the same which is shit
+# def buildNetwork(EIEJ_plots):
+#     """
+#     Builds a networkx network using edges from EIEJ_plots which are built upon EI and EJ at "Matrixfuncs.py"
+#     After this step, the order of edges at EIEJ_plots and in the networkx net is not the same which is shit
     
-    input:
-    EIEJ_plots - 2D np.array sized [NE, 2] - 
-                 EIEJ_plots[i,0] and EIEJ_plots[i,1] are input and output nodes to edge i, respectively
+#     input:
+#     EIEJ_plots - 2D np.array sized [NE, 2] - 
+#                  EIEJ_plots[i,0] and EIEJ_plots[i,1] are input and output nodes to edge i, respectively
     
-    output:
-    NET - networkx network containing just the edges from EIEJ_plots
-    """
-    
-    NET = nx.DiGraph()  # initiate graph object
-    NET.add_edges_from(EIEJ_plots)  # add edges 
-    return NET
+#     output:
+#     NET - networkx network containing just the edges from EIEJ_plots
+#     """
+#     NET = nx.DiGraph()  # initiate graph object
+#     NET.add_edges_from(EIEJ_plots)  # add edges 
+#     return NET
 
  
-def plotNetStructure(NET, layout='Cells', plot='no', node_labels=True):
+def plotNetStructure(NET, NGrid, layout='Cells', plot='no', node_labels=True):
     """
     Plots the structure (nodes and edges) of networkx NET 
     
@@ -40,9 +39,9 @@ def plotNetStructure(NET, layout='Cells', plot='no', node_labels=True):
     matplotlib plot of network structure
     """
     
-    if layout == 'Cells':  # Roie style of connected crosses
+    if layout == 'Cells':  # Roie style of 2D array of connected crosses
         pos_lattice = {}  # initiate dictionary of node positions
-        NGrid = int(np.sqrt(len(NET.nodes)/5))  # number of cells in network, considering only cubic array of cells
+        # NGrid = int(np.sqrt(len(NET.nodes)/5))  # number of cells in network, considering only cubic array of cells
         k=0  # dummy
         for i in range(NGrid):  # network rows
             for j in range(NGrid):  # network columns
@@ -52,6 +51,15 @@ def plotNetStructure(NET, layout='Cells', plot='no', node_labels=True):
                 pos_lattice[5*i+5*j+5*k+3] = array([0+5*j, 2.2+5*i])  # upper node
                 pos_lattice[5*i+5*j+5*k+4] = array([0+5*j, 0+5*i])  # middle node
             k+=NGrid-1  # add to dummy index so skipping to next cell
+    elif layout == 'oneCol':  # Roie style of single column of connected crosses
+        pos_lattice = {}  # initiate dictionary of node positions
+        # NGrid = int(len(NET.nodes)/5)  # number of cells in network, considering only cubic array of cells
+        for i in range(NGrid):  # network columns
+            pos_lattice[5*i] = array([-2.2, 0+5*i])  # left node in cell
+            pos_lattice[5*i+1] = array([0, -2.2+5*i])  # lower node in cell
+            pos_lattice[5*i+2] = array([2.2, 0+5*i])  # right node
+            pos_lattice[5*i+3] = array([0, 2.2+5*i])  # upper node
+            pos_lattice[5*i+4] = array([0, 0+5*i])  # middle node
     elif layout == 'spectral':
         pos_lattice = nx.spectral_layout(NET)
     elif layout == 'planar':
@@ -139,13 +147,16 @@ def PlotNetwork(p, u, K, BigClass, EIEJ_plots, NN, NE, nodes='yes', edges='yes',
 
     if pressureSurf == 'yes':
         figsize = 5*BigClass.Variabs.NGrid
-        p_mat = Statistics.p_mat(p, BigClass.Variabs.NGrid)
-        X = np.arange(0, figsize, figsize/np.shape(p_mat)[0])
-        Y = np.arange(0, figsize, figsize/np.shape(p_mat)[1])
+        p_mat = Statistics.p_mat(BigClass, p)
+        X = np.arange(-4, 5, 8)
+        Y = np.arange(-4, figsize+5, figsize/np.shape(p_mat)[1]+2)
         X, Y = np.meshgrid(X, Y)
+        print(X)
+        print(Y)
+        print(p_mat)
 
         # Plot the surface.
-        plt.contourf(X, Y, p_mat, cmap=plt.cm.cool,
+        plt.contourf(X, Y, p_mat.T, cmap=plt.cm.cool,
                      linewidth=0, antialiased=False)
 
     # Need to create a layout when doing
