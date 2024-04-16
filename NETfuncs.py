@@ -146,11 +146,18 @@ def PlotNetwork(p, u, K, BigClass, EIEJ_plots, NN, NE, nodes='yes', edges='yes',
     edgewidths_b_negative = rescaled_u_NET[list(set(high_K_NET_inds) & set(negative_u_NET_inds))]
 
     if pressureSurf == 'yes':
-        figsize = 5*BigClass.Variabs.NGrid
         p_mat = Statistics.p_mat(BigClass, p)
-        X = np.arange(-4, 5, 8)
-        Y = np.arange(-4, figsize+5, figsize/np.shape(p_mat)[1]+2)
+        figsizeX = 5*np.shape(p_mat)[0]
+        figsizeY = 5*np.shape(p_mat)[1]
+        X = np.arange(0, figsizeX, 5)
+        Y = np.arange(0, figsizeY, 5)
         X, Y = np.meshgrid(X, Y)
+
+        # figsize = 5*BigClass.Variabs.NGrid
+        # p_mat = Statistics.p_mat(BigClass, p)
+        # X = np.arange(-4, 5, 8)
+        # Y = np.arange(-4, figsize+5, figsize/np.shape(p_mat)[1]+2)
+        # X, Y = np.meshgrid(X, Y)
         print(X)
         print(Y)
         print(p_mat)
@@ -196,5 +203,5 @@ def PlotNetwork(p, u, K, BigClass, EIEJ_plots, NN, NE, nodes='yes', edges='yes',
     plt.show()
 
 def PlotPressureContours(BigClass, p):
-    p_mat = Statistics.p_mat(p, BigClass.Variabs.NGrid)
+    p_mat = Statistics.p_mat(BigClass, p)
     return p_mat

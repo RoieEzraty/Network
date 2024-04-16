@@ -107,7 +107,7 @@ def build_input_output_and_fixed(task_type, row, NGrid):
         fixed_nodes = np.array([])
     elif task_type == 'Counter':
         input_output_pairs = np.array([[4, NGrid*5-1], [NGrid*5-1, 4]])
-        fixed_nodes = np.array([np.linspace(7, (NGrid-1)*5+2, NGrid-1, dtype=int)])
+        fixed_nodes = np.array([np.linspace(5*1+2, 5*(NGrid-2)+2, NGrid-2, dtype=int)])
     elif task_type == 'Allostery_one_pair': 
         input_output_pairs = np.array([[(row*NGrid+int(np.ceil(NGrid/2)))*5-1, 
                                         (NGrid*(NGrid-(row+1))+int(np.ceil(NGrid/2)))*5-1], 
