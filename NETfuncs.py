@@ -125,8 +125,10 @@ def PlotNetwork(p, u, K, BigClass, EIEJ_plots, NN, NE, nodes='yes', edges='yes',
     
     # low_K_NET_inds = np.where(K_NET==min(K_NET))[0]  # indices of edges with low conductivity
     # high_K_NET_inds = np.where(K_NET!=min(K_NET))[0]  # indices of edges with higher conductivity
-    low_K_NET_inds = np.where(K_NET!=max(K_NET))[0]  # indices of edges with low conductivity
-    high_K_NET_inds = np.where(K_NET==max(K_NET))[0]  # indices of edges with higher conductivity
+    # low_K_NET_inds = np.where(K_NET!=max(K_NET))[0]  # indices of edges with low conductivity
+    # high_K_NET_inds = np.where(K_NET==max(K_NET))[0]  # indices of edges with higher conductivity
+    low_K_NET_inds = np.where(K_NET==BigClass.Variabs.K_min)[0]  # indices of edges with low conductivity
+    high_K_NET_inds = np.where(K_NET!=BigClass.Variabs.K_min)[0]  # indices of edges with higher conductivity
     positive_u_NET_inds = np.where(u_NET>10**-10)[0]  # indices of edges with positive flow vel
     negative_u_NET_inds = np.where(u_NET<-10**-10)[0]  # indices of edges with negative flow vel
     
@@ -187,8 +189,12 @@ def PlotNetwork(p, u, K, BigClass, EIEJ_plots, NN, NE, nodes='yes', edges='yes',
         #                        arrowstyle='<|-')
         nx.draw_networkx_edges(NET, pos_lattice, edgelist=r_edges_positive, edge_color='r', arrows=True, width=edgewidths_k_positive,
                                arrowstyle='->')
+        nx.draw_networkx_edges(NET, pos_lattice, edgelist=r_edges_positive, edge_color='r', arrows=True, width=1,
+                               arrowstyle='-[')
         nx.draw_networkx_edges(NET, pos_lattice, edgelist=r_edges_negative, edge_color='r', arrows=True, width=edgewidths_k_negative,
                                arrowstyle='<-')
+        nx.draw_networkx_edges(NET, pos_lattice, edgelist=r_edges_negative, edge_color='r', arrows=True, width=1,
+                               arrowstyle=']-')
         nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_positive, edge_color='k', arrows=True, width=edgewidths_b_positive,
                                arrowstyle='->')
         nx.draw_networkx_edges(NET, pos_lattice, edgelist=b_edges_negative, edge_color='k', arrows=True, width=edgewidths_b_negative,

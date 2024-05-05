@@ -357,9 +357,12 @@ class Net_structure:
 			# Determine boundary conditions - modulus 2 for 'Counter'
 			EdgeData = self.EdgeData_full[m]
 			Edges = self.Edges_full[m]
-			NodeData = np.append(self.InNodeData_full[m], self.FixedNodeData_full)
-			Nodes = np.append(self.InNodes_full[m], self.FixedNodes_full)
-			GroundNodes = self.GroundNodes_full[m]
+			NodeData = self.InNodeData_full[m]
+			Nodes = self.InNodes_full[m]
+			if m == 0:  # push from bottom (Nodes[0]), open all sides (Fixed), block top (no Ground)	
+				GroundNodes = self.FixedNodes_full
+			else:  # Push from top (Nodes[1]), open bottom (Ground[1])
+				GroundNodes = self.GroundNodes_full[m]
 
 		return NodeData, Nodes, EdgeData, Edges, GroundNodes
 
@@ -435,11 +438,21 @@ class Net_state:
 		frac_moved = noise_amp  # fraction of marbles moved, on average
 		u_thresh = BigClass.Variabs.u_thresh  # float, threshold of flow above which marbles move
 
-		self.K = K_max*np.ones([NE])
+		self.K_backg = K_max*np.ones([NE])
+		if BigClass.Variabs.task_type == 'Counter':
+			for i in range(BigClass.Variabs.NGrid-2):
+				self.K_backg[(i+1)*4+2] = K_max / ((BigClass.Variabs.NGrid - i - 2) * 3 - 2)
+			print('background resistances')
+			print(1/self.K_backg)
+			self.K = copy.copy(self.K_backg)
+		else:
+			self.K_backg = K_max*np.ones([NE])
+			self.K = copy.copy(self.K_backg)
+			
 
 		if noise == 'rand_u' or noise == 'rand_K':
 			u_rand = BigClass.Solver.solve.create_randomized_u(BigClass, NE, frac_moved, u_thresh, noise)
-			self.K = Matrixfuncs.ChangeKFromFlow(u_rand, u_thresh, self.K, BigClass.Variabs.NGrid, 
+			self.K = Matrixfuncs.ChangeKFromFlow(u_rand, u_thresh, self.K, self.K_backg, BigClass.Variabs.NGrid, 
 												K_change_scheme=BigClass.Variabs.K_scheme, K_max=BigClass.Variabs.K_max, 
 												K_min=BigClass.Variabs.K_min)  # move marble, change conductivities
 		
@@ -451,13 +464,14 @@ class Net_state:
 		else:  # for all other tasks, no marbles to get stuck at boundary edge
 			bc_nodes_full = [BigClass.Strctr.InNodes_full, BigClass.Strctr.FixedNodes_full, BigClass.Strctr.GroundNodes_full]
 		for i in bc_nodes_full:
-			length = len(i)
-			self.fixK(BigClass, i, length)
+			self.fixK(BigClass, i)
 		self.K_mat = np.eye(BigClass.Strctr.NE) * self.K
 
-	def fixK(self, BigClass, nodes, length):
+	def fixK(self, BigClass, nodes):
+		length = len(nodes)
 		for n in nodes.reshape(length):
-			self.K[BigClass.Strctr.EJ == n] = BigClass.Variabs.K_max
+			# self.K[BigClass.Strctr.EJ == n] = BigClass.Variabs.K_max
+			self.K[BigClass.Strctr.EJ == n] = self.K_backg[BigClass.Strctr.EJ == n]
 
 	def solve_flow_const_K(self, BigClass, u, Cstr, f, iters_same_BCs):
 		"""
@@ -482,21 +496,27 @@ class Net_state:
 		for o in range(iters_same_BCs):	
 
 			# create effective conductivities if they are flow dependent
+			# print('K before change')
+			# print(self.K)
 			K_eff = copy.copy(self.K)
 			if BigClass.Variabs.K_type == 'flow_dep':
-				K_eff[u_nxt>0] = BigClass.Variabs.K_max
+				# K_eff[u_nxt>0] = BigClass.Variabs.K_max
+				K_eff[u_nxt>0] = self.K_backg[u_nxt>0]
 			K_eff_mat = np.eye(BigClass.Strctr.NE) * K_eff
-
+			# print('K after change')
+			# print(K_eff)
 			L, L_bar = Matrixfuncs.buildL(BigClass, BigClass.Strctr.DM, K_eff_mat, Cstr, BigClass.Strctr.NN)  # Lagrangian
 
 			p, u_nxt = BigClass.Solver.solve.Solve_flow(L_bar, BigClass.Strctr.EI, BigClass.Strctr.EJ, K_eff, f, round=10**-10)  # pressure and flow
-			
 			# NETfuncs.PlotNetwork(p, u_nxt, self.K, BigClass, BigClass.Strctr.EIEJ_plots, BigClass.Strctr.NN, 
-			# 					 BigClass.Strctr.NE, nodes='no', edges='yes', savefig='no')
+			# 					 BigClass.Strctr.NE, nodes='yes', edges='yes', savefig='no')
 
 			# break the loop
 			# since no further changes will be measured in flow and conductivities at end of next cycle
-			if np.all((u_nxt>0)[0] == (u>0)[0]):
+			# print('differences in u')
+			# print(np.all((u_nxt>0) == (u>0)))
+			if np.all((u_nxt>0) == (u>0)):
+			# if np.all((u_nxt>0)[0] == (u>0)[0]):
 			# if np.all(u_nxt == u):
 				u = copy.copy(u_nxt)
 				break
@@ -549,10 +569,9 @@ class Net_state:
 
 			# if sim_type == 'w marbles' or sim_type == 'allostery test':  # Update conductivities
 			if sim_type == 'w marbles':  # Update conductivities
-				K_nxt = Matrixfuncs.ChangeKFromFlow(u_nxt, BigClass.Variabs.u_thresh, self.K, BigClass.Variabs.NGrid, 
+				K_nxt = Matrixfuncs.ChangeKFromFlow(u_nxt, BigClass.Variabs.u_thresh, self.K, self.K_backg, BigClass.Variabs.NGrid, 
 													K_change_scheme=BigClass.Variabs.K_scheme, K_max=BigClass.Variabs.K_max, 
 													K_min=BigClass.Variabs.K_min, beta=BigClass.Variabs.beta)
-				
 				self.K_mat = np.eye(BigClass.Strctr.NE) * K_nxt
 				# print('difference in u %f ' %(np.mean(np.abs(u_nxt) - np.abs(u))/np.mean(np.abs(u_nxt))))
 				K_old = copy.copy(self.K)
@@ -567,6 +586,8 @@ class Net_state:
 			if np.all(u_nxt == u):
 				# print('converged, no further change in K')
 				print('# iterations %d' %l)
+				print('Ks are')
+				print(self.K)
 				break
 			else:
 				# NETfuncs.PlotNetwork(p, u_nxt, self.K, BigClass, Strctr.EIEJ_plots, Strctr.NN, Strctr.NE)
