@@ -45,7 +45,9 @@ class User_variables:
 					     'bidir'    = conductivity is the same regardless of flow directions
 					     'flow_dep' = conductivity depends on flow direction - if into cell then maximal, if out and there is a marble then lower
 	iterations         - int, # iterations allowed under flow cycles / updating conductivities
-	input_output_pairs - np.array of input and output node pairs. State.flow_iterate() will know how to handle them.
+	input_nodes_lst  - array of all input nodes in task, even when they switch roles. State.flow_iterate() will handle them.
+    output_nodes_lst - array of all output nodes in task, even when they switch roles. State.flow_iterate() will handle them.
+    # input_output_pairs - array of input and output node pairs. State.flow_iterate() will know how to handle them.
 	Periodic           - bool, 'True'=lattice has periodic boundaries, default='False'
 	net_typ            - str, layout for NETfuncs plotNetStructure(). 
 	                     'Cells' is Roie's style of network and is default
@@ -57,8 +59,8 @@ class User_variables:
 	beta               - default=0.0
 	"""
 
-	def __init__(self, NGrid, input_p, flow_scheme, task_type, K_scheme, K_type, iterations, input_output_pairs, 
-		         Periodic='False', net_typ='Cells', u_thresh=1, fixed_nodes=0, K_max=1, K_min=0.5, beta=0.0):
+	def __init__(self, NGrid, input_p, flow_scheme, task_type, K_scheme, K_type, iterations, input_nodes_lst,
+				 output_nodes_lst, Periodic='False', net_typ='Cells', u_thresh=1, fixed_nodes=0, K_max=1, K_min=0.5, beta=0.0):
 		self.NGrid = NGrid		
 		if len(input_p)==1:
 			self.input_p = input_p
@@ -79,7 +81,9 @@ class User_variables:
 			self.fixed_nodes = np.array([])
 
 		self.iterations = iterations
-		self.input_output_pairs = input_output_pairs
+		# self.input_output_pairs = input_output_pairs
+		self.input_nodes_lst = input_nodes_lst
+		self.output_nodes_lst = output_nodes_lst
 		self.Periodic = Periodic
 		self.net_typ = net_typ
 		self.u_thresh = u_thresh
