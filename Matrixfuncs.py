@@ -197,20 +197,16 @@ def ChangeKFromFlow(u, thresh, K, K_backg, NGrid, K_change_scheme='marbles_press
         # NCells = NGrid*NGrid  # total number of cells in network
         NCells = int(len(K_nxt)/4)  # total number of cells in network
         for i in range(NCells):  # change K's in every cell separately
-            if (K_change_scheme=='marbles_p_lower_l_half' or K_change_scheme=='marbles_p_upper_l_half') and i not in allowed_cells:  # skip update of the K's in that cell since it is not at lower left half of domain
-                # print(f'cell #{i} skipped')
-                pass
-            else:  # update K's cell by cell
-                u_sub = u[4*i:4*(i+1)]  # velocities at particular cell
-                K_sub = K[4*i:4*(i+1)]  # conductivities at particular cell
-                if type(thresh) == np.ndarray:
-                    thresh_sub = thresh[4*i:4*(i+1)]
-                else:
-                    thresh_sub = copy.copy(thresh)
-                K_backg_sub = K_backg[4*i:4*(i+1)]  # background conductivities at particular cell
-                # change K's at particular cell
-                K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, thresh_sub, K_sub, K_backg_sub, K_max, K_min, K_change_scheme)
-                K_nxt[4*i:4*(i+1)] = K_sub_nxt  # put them in the right place at K_nxt
+            u_sub = u[4*i:4*(i+1)]  # velocities at particular cell
+            K_sub = K[4*i:4*(i+1)]  # conductivities at particular cell
+            if type(thresh) == np.ndarray:
+                thresh_sub = thresh[4*i:4*(i+1)]
+            else:
+                thresh_sub = copy.copy(thresh)
+            K_backg_sub = K_backg[4*i:4*(i+1)]  # background conductivities at particular cell
+            # change K's at particular cell
+            K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, thresh_sub, K_sub, K_backg_sub, K_max, K_min, K_change_scheme)
+            K_nxt[4*i:4*(i+1)] = K_sub_nxt  # put them in the right place at K_nxt
     return K_nxt
 
 def ChangeKFromFlow_singleCell(u, thresh, K, K_backg, K_max, K_min, K_change_scheme):
