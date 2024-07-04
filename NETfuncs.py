@@ -26,7 +26,7 @@ import Statistics
 #     return NET
 
  
-def plotNetStructure(NET, NGrid, layout='Cells', plot='no', node_labels=True):
+def plotNetStructure(NET, NGrid, scale, squish, layout='Cells', plot='no', node_labels=True):
     """
     Plots the structure (nodes and edges) of networkx NET 
     
@@ -45,21 +45,26 @@ def plotNetStructure(NET, NGrid, layout='Cells', plot='no', node_labels=True):
         k=0  # dummy
         for i in range(NGrid):  # network rows
             for j in range(NGrid):  # network columns
-                pos_lattice[5*i+5*j+5*k] = array([-2.2+5*j, 0+5*i])  # left node in cell
-                pos_lattice[5*i+5*j+5*k+1] = array([0+5*j, -2.2+5*i])  # lower node in cell
-                pos_lattice[5*i+5*j+5*k+2] = array([2.2+5*j, 0+5*i])  # right node
-                pos_lattice[5*i+5*j+5*k+3] = array([0+5*j, 2.2+5*i])  # upper node
-                pos_lattice[5*i+5*j+5*k+4] = array([0+5*j, 0+5*i])  # middle node
+                pos_lattice[scale*(i+j+k)] = array([-(scale/2-squish)+scale*j, 0+scale*i])  # left node in cell
+                pos_lattice[scale*(i+j+k)+1] = array([0+scale*j, -(scale/2-squish)+scale*i])  # lower node in cell
+                pos_lattice[scale*(i+j+k)+2] = array([(scale/2-squish)+scale*j, 0+scale*i])  # right node
+                pos_lattice[scale*(i+j+k)+3] = array([0+scale*j, (scale/2-squish)+scale*i])  # upper node
+                pos_lattice[scale*(i+j+k)+4] = array([0+scale*j, 0+scale*i])  # middle node
+                # pos_lattice[5*i+5*j+5*k] = array([-2.2+5*j, 0+5*i])  # left node in cell
+                # pos_lattice[5*i+5*j+5*k+1] = array([0+5*j, -2.2+5*i])  # lower node in cell
+                # pos_lattice[5*i+5*j+5*k+2] = array([2.2+5*j, 0+5*i])  # right node
+                # pos_lattice[5*i+5*j+5*k+3] = array([0+5*j, 2.2+5*i])  # upper node
+                # pos_lattice[5*i+5*j+5*k+4] = array([0+5*j, 0+5*i])  # middle node
             k+=NGrid-1  # add to dummy index so skipping to next cell
     elif layout == 'oneCol':  # Roie style of single column of connected crosses
         pos_lattice = {}  # initiate dictionary of node positions
         # NGrid = int(len(NET.nodes)/5)  # number of cells in network, considering only cubic array of cells
         for i in range(NGrid):  # network columns
-            pos_lattice[5*i] = array([-2.2, 0+5*i])  # left node in cell
-            pos_lattice[5*i+1] = array([0, -2.2+5*i])  # lower node in cell
-            pos_lattice[5*i+2] = array([2.2, 0+5*i])  # right node
-            pos_lattice[5*i+3] = array([0, 2.2+5*i])  # upper node
-            pos_lattice[5*i+4] = array([0, 0+5*i])  # middle node
+            pos_lattice[scale*i] = array([-(scale/2-squish), 0+scale*i])  # left node in cell
+            pos_lattice[scale*i+1] = array([0, -(scale/2-squish)+scale*i])  # lower node in cell
+            pos_lattice[scale*i+2] = array([(scale/2-squish), 0+scale*i])  # right node
+            pos_lattice[scale*i+3] = array([0, (scale/2-squish)+scale*i])  # upper node
+            pos_lattice[scale*i+4] = array([0, 0+scale*i])  # middle node
     elif layout == 'spectral':
         pos_lattice = nx.spectral_layout(NET)
     elif layout == 'planar':
@@ -69,6 +74,7 @@ def plotNetStructure(NET, NGrid, layout='Cells', plot='no', node_labels=True):
 
     if plot == 'yes':
         nx.draw_networkx(NET, pos_lattice, edge_color='b', node_color='b', with_labels=node_labels)
+        # nx.draw_networkx(NET, pos_lattice, edge_color='b', node_color='b', with_labels=False)
         plt.show()
         
     print('NET is ready')
@@ -97,7 +103,7 @@ def PlotNetwork(p, u, K, BigClass, EIEJ_plots, NN, NE, nodes='yes', edges='yes',
 
     # Preliminaries for the plot
     # node_sizes = 24
-    node_sizes = 8*24
+    node_sizes = 4*24
     # IO_node_sizes = 42
     u_rescale_factor = 5
     
@@ -160,13 +166,14 @@ def PlotNetwork(p, u, K, BigClass, EIEJ_plots, NN, NE, nodes='yes', edges='yes',
         # X = np.arange(-4, 5, 8)
         # Y = np.arange(-4, figsize+5, figsize/np.shape(p_mat)[1]+2)
         # X, Y = np.meshgrid(X, Y)
-        print(X)
-        print(Y)
-        print(p_mat)
+        # print(X)
+        # print(Y)
+        # print(p_mat)
 
         # Plot the surface.
-        plt.contourf(X, Y, p_mat.T, cmap=plt.cm.cool,
-                     linewidth=0, antialiased=False)
+        # plt.contourf(X, Y, p_mat.T, cmap=plt.cm.cool,
+        #              linewidth=0, antialiased=False)
+        plt.contourf(X, Y, p_mat, cmap=plt.cm.cool, linewidth=0, antialiased=False)
 
     # Need to create a layout when doing
     # separate calls to draw nodes and edges

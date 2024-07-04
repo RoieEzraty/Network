@@ -1,5 +1,4 @@
 ## Statistics over the network etc.
-
 import numpy as np
 
 def flow_MSE(u, step, u_nxt=[]):
@@ -63,6 +62,95 @@ def power_dissip(u, K):
 	return P
 
 
+def calc_loss(output, target, function):
+	"""
+	calc_loss calculates the loss between output and target given the loss function "function"
+
+	inputs:
+	output   - array, output of flow through ground nodes
+	target   - array, desired target output
+	function - string, naming the method used to calculate the loss
+
+	output:
+	loss - float, loss as in machine learning
+	"""
+	if function == 'MSE':  # Mean Square error where output and taget are 1D arrays of same length.
+		loss = np.mean(np.square(output-target))
+	elif function == 'abs_diff':
+		loss = np.mean(np.abs((output-target)/((output+target)/2)))  # mean for Allostery since output is 2dim. mean is redundant in regression.
+		# loss = np.abs((output-target)/((output+target)/2))
+	elif function == 'diff':
+		loss = target-output  # mean for Allostery since output is 2dim. mean is redundant in regression.
+	elif function == 'MSE_normalized':
+		loss = np.mean(np.square(output-target)/((np.square(output)+np.square(target))/4))
+	elif function == 'cross_entropy':  # as in Li & Mao 2024 https://arxiv.org/abs/2404.15471
+		pc = array([np.exp(output[i])/np.sum(np.exp(output)) for i in range(len(output))])  # predicted probability of output
+		loss = - np.dot(target, np.log(pc))
+	return loss
+
+
+def calc_ratio_loss(output, target, input_p):
+	"""
+	calc_ratio calculates the ratio between output and targets
+
+	inputs:
+	output   - array, output of flow through ground nodes
+	target   - array, desired target output
+	input_p  - array for Regression, float for rest (I think), pressure at input nodes
+
+	output:
+	ratio - float
+	"""
+	if np.size(output)>1:
+		# ratio_loss = (target[0]/target[1]-output[0]/output[1])/(target[0]/target[1] - 1)
+		ratio_loss = np.mean(np.abs((target - output)/(target)))
+	else:
+		# p_noBalls = np.sum(input_p)/(2+.64)  # numerically calculated, theoretical p at output as if no balls, large nets.
+		# ratio_loss = (target - output)/(target - p_noBalls)
+		ratio_loss = np.abs((target - output)/(target))
+		R_tot = np.sum(input_p)/output
+		print('R tot ', R_tot)
+	return ratio_loss
+
+
+def calculate_p_nudge(BigClass, state, p_desired, error=0):
+	"""
+	calculate_p_nudge calculates the nudged pressure - whether in contrastive learning or dual problem
+
+	inputs:
+	BigClass  - class instance with all relevant data
+	p_desired - 1d array of desired outputs at output nodes
+	error     - 1d array of error from desired measure for the dual case, sized [2,]
+
+	outputs:
+	p_nudge - 1d array of pressure values to be assigned to output nodes, for the clamped stage
+	"""
+	if BigClass.Variabs.flow_scheme=='dual':
+		if BigClass.Variabs.task_type=='Allostery':
+			p_nudge = state.p_nudge - np.dot(BigClass.Variabs.alpha * error)
+		elif BigClass.Variabs.task_type=='Regression':
+			p_nudge = state.p_nudge - BigClass.Variabs.alpha * error
+	else:
+		p_nudge = BigClass.Variabs.etta*p_desired + (1-BigClass.Variabs.etta)*self.p_output
+	return p_nudge
+
+
+def calculate_output_dual(BigClass, outputs_dual_prev, error):
+	"""
+	calculate_output_dual calculates the nudged outputs - dual problem
+
+	inputs:
+	BigClass - class instance with all relevant data
+	state    - 1d array of measured outputs at output nodes
+	error    - 1d array of error from desired measure for the dual case, sized [2,]
+
+	outputs:
+	p_nudge - 1d array of pressure values to be assigned to output nodes, for the clamped stage
+	"""
+	if BigClass.Variabs.flow_scheme=='dual':
+		outputs_dual = outputs_dual_prev + BigClass.Variabs.alpha * error
+	return outputs_dual
+
 def shear_type(u):
 	"""
 	shear_type calculates the type of shear the system obtains after training,
@@ -84,6 +172,7 @@ def shear_type(u):
 	return shear_type
     
     # shear_type = np.array([u_demean_norm[0,0], u_demean_norm[1,1]])
+
 
 def curl_direction(u, NGrid):
 	"""
@@ -113,6 +202,7 @@ def curl_direction(u, NGrid):
 	u_mean = 1
 	curl_norm = curl/u_mean
 	return np.mean(np.mean(curl_norm))
+
 
 def p_mat(BigClass, p):
 	"""

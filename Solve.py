@@ -3,6 +3,7 @@ import numpy.random as rand
 import copy
 from numpy.linalg import inv as inv
 import Matrixfuncs
+from functools import lru_cache
 
 def solve_flow_const_K(K, BigClass, u, Cstr, f, iters_same_BCs):
     """
@@ -51,6 +52,8 @@ def solve_flow_const_K(K, BigClass, u, Cstr, f, iters_same_BCs):
 
     return p, u_nxt
 
+
+# @lru_cache(maxsize=20)
 def buildL(BigClass, DM, K_mat, Cstr, NN):
     """
     Builds expanded Lagrangian with constraints 
@@ -74,8 +77,8 @@ def buildL(BigClass, DM, K_mat, Cstr, NN):
     L_bar[:NN,:NN] = L  # The topmost and leftmost part of augmented L are the basic L
     return L, L_bar
 
-    
 
+# @lru_cache(maxsize=20)
 def Solve_flow(L_bar, EI, EJ, K, f, round=10**-10):
     """
     Solves for the pressure at nodes and flow at edges, given Lagrangian etc.
@@ -103,6 +106,7 @@ def Solve_flow(L_bar, EI, EJ, K, f, round=10**-10):
     p, u = round_small(p, u)
     return p, u
 
+
 def round_small(p, u):
     """
     round_small rounds values of u and p that are close to 0 to get rid of rounding problems
@@ -113,8 +117,10 @@ def round_small(p, u):
 
     return p, u
 
+
 def dot_triple(X, Y, Z):
     return np.dot(X, np.dot(Y, Z))
+
 
 def create_randomized_u(BigClass, NE, frac_moved, u_thresh, noise):
     """

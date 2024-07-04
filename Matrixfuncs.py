@@ -5,7 +5,6 @@ from numpy import array as array
 from numpy import arange as arange
 from numpy import zeros as zeros
  
- 
 def buildL(BigClass, DM, K_mat, Cstr, NN):
     """
     Builds expanded Lagrangian with constraints 
@@ -198,9 +197,13 @@ def ChangeKFromFlow(u, thresh, K, K_backg, NGrid, K_change_scheme='marbles_press
         for i in range(NCells):  # change K's in every cell separately
             u_sub = u[4*i:4*(i+1)]  # velocities at particular cell
             K_sub = K[4*i:4*(i+1)]  # conductivities at particular cell
+            if type(thresh) == np.ndarray:
+                thresh_sub = thresh[4*i:4*(i+1)]
+            else:
+                thresh_sub = copy.copy(thresh)
             K_backg_sub = K_backg[4*i:4*(i+1)]  # background conductivities at particular cell
             # change K's at particular cell
-            K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, thresh, K_sub, K_backg_sub, K_max, K_min, K_change_scheme)
+            K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, thresh_sub, K_sub, K_backg_sub, K_max, K_min, K_change_scheme)
             K_nxt[4*i:4*(i+1)] = K_sub_nxt  # put them in the right place at K_nxt
     return K_nxt
 
