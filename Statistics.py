@@ -137,7 +137,9 @@ def calculate_p_nudge(BigClass, State, error=0.0, p_in=0.0, error_prev=0.0, p_in
 			print('error_prev', error_prev)
 			print('p_in_prev', p_in_prev)
 			p_nudge = State.p_nudge - BigClass.Variabs.alpha * (p_in - p_in_prev) * (error - error_prev)
+			print('State.outputs_dual', State.outputs_dual)
 			outputs_dual = State.outputs_dual + BigClass.Variabs.alpha * (error - error_prev)
+			print('outputs_dual next', outputs_dual)
 		return p_nudge, outputs_dual
 	else:
 		p_nudge = BigClass.Variabs.etta*BigClass.Variabs.p_desired + (1-BigClass.Variabs.etta)*State.p_outputs

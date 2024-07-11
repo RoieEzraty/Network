@@ -200,9 +200,10 @@ def Constraints_afo_task(Variabs, Strctr, State, sim_type, i, train_sample):
                 if flow_scheme == 'dual':
                     InNodeData_full = State.p_nudge
                     FixedNodeData_full_nudged = State.outputs_dual
+                    NodeData, Nodes = np.append(InNodeData_full, FixedNodeData_full_nudged)*Variabs.mag_factor, np.append(InNodes_full, FixedNodes_full)
                 else:
                     FixedNodeData_full_nudged = State.p_nudge
-                NodeData, Nodes = np.append(InNodeData_full*train_sample, FixedNodeData_full_nudged)*Variabs.mag_factor, np.append(InNodes_full, FixedNodes_full)
+                    NodeData, Nodes = np.append(InNodeData_full*train_sample, FixedNodeData_full_nudged)*Variabs.mag_factor, np.append(InNodes_full, FixedNodes_full)
             else:  # input nodes multiplied by pressure for train sample
                 FixedNodeData_full_nudged = State.p_nudge
                 NodeData, Nodes = np.append(InNodeData_full*train_sample, FixedNodeData_full_nudged)*Variabs.mag_factor, np.append(InNodes_full, FixedNodes_full)
@@ -215,10 +216,10 @@ def Constraints_afo_task(Variabs, Strctr, State, sim_type, i, train_sample):
         EdgeData, Edges, GroundNodes = array([EdgeData_full[0]]), Edges_full, GroundNodes_full
         # print('m=', m, '\nNodeData ', NodeData, ', Nodes ', Nodes)
         print('\ni=', i, '\nm=', m) 
-        print('InNodeData_full', InNodeData_full)
-        print('train_sample', train_sample)
-        print('InNodes_full', InNodes_full)
-        print('FixedNodes_full', FixedNodes_full)       
+        # print('InNodeData_full', InNodeData_full)
+        # print('train_sample', train_sample)
+        # print('InNodes_full', InNodes_full)
+        # print('FixedNodes_full', FixedNodes_full)       
     elif task_type == 'Allostery_one_pair':
         # Determine boundary conditions - only first direction for 'Allostery_one_pair'
         NodeData, Nodes, EdgeData, Edges = array([InNodeData_full[0]]), array([InNodes_full[0]]),\

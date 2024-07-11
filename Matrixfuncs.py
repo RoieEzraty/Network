@@ -163,7 +163,7 @@ def build_incidence(Variabs):
     return EI, EJ, EIEJ_plots, DM, NE, NN
 
 
-def ChangeKFromFlow(u, thresh, K, K_backg, NGrid, K_change_scheme='marbles_pressure', K_max=1, K_min=0.5, beta=0.0):
+def ChangeKFromFlow(u, thresh, K, K_backg, NGrid, K_change_scheme='marbles_pressure', allowed_cells=[], K_max=1, K_min=0.5, beta=0.0):
     """
     Change conductivities of full network given velocities
     This is done by dividing the network into cells
@@ -175,7 +175,8 @@ def ChangeKFromFlow(u, thresh, K, K_backg, NGrid, K_change_scheme='marbles_press
     K               - [NEdges] 2D cubic np.array of conductivities
     K_backg         - [NEdges] 2D cubic np.array of background conductivities, as if no marbles
     NGrid           - number of cells at each side of the network
-    K_change_scheme - str, scheme for how to change conductivities due to u or p. default='marbles'
+    K_change_scheme - str, scheme for how to change conductivities due to u or p. default='marbles_pressure'
+    allowed_cells   - np.array of ints denoting the cells whose K's are allowed to change
     K_max           - float, value of maximal conductivity, default=1
     K_min           - float, value of minimal conductivity, default=0.5
     beta            - float, vaule for conductivity change proportional to velocity squared, default=0.0
@@ -185,26 +186,31 @@ def ChangeKFromFlow(u, thresh, K, K_backg, NGrid, K_change_scheme='marbles_press
     """
     K_nxt = copy.copy(K)
 
-    if K_change_scheme == 'propto_current_squared':
+    if K_change_scheme == 'propto_current_squared':  # resistances (1/conductances) are proportional to Q^2
         u_sqrd_mean = np.mean(u**2)
         R = K ** (-1)
         R_max = K_min ** (-1)
         R_nxt = R + beta * u ** 2 / u_sqrd_mean * (R_max - R) / R_max
         K_nxt = R_nxt ** (-1)
-    elif K_change_scheme == 'marbles_u' or K_change_scheme == 'marbles_pressure':    
+    # if conductances change due to delta p or Q    
+    elif K_change_scheme == 'marbles_u' or K_change_scheme == 'marbles_pressure' or K_change_scheme=='marbles_p_lower_l_half' or K_change_scheme == 'marbles_p_upper_l_half':  
         # NCells = NGrid*NGrid  # total number of cells in network
         NCells = int(len(K_nxt)/4)  # total number of cells in network
         for i in range(NCells):  # change K's in every cell separately
-            u_sub = u[4*i:4*(i+1)]  # velocities at particular cell
-            K_sub = K[4*i:4*(i+1)]  # conductivities at particular cell
-            if type(thresh) == np.ndarray:
-                thresh_sub = thresh[4*i:4*(i+1)]
-            else:
-                thresh_sub = copy.copy(thresh)
-            K_backg_sub = K_backg[4*i:4*(i+1)]  # background conductivities at particular cell
-            # change K's at particular cell
-            K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, thresh_sub, K_sub, K_backg_sub, K_max, K_min, K_change_scheme)
-            K_nxt[4*i:4*(i+1)] = K_sub_nxt  # put them in the right place at K_nxt
+            if (K_change_scheme=='marbles_p_lower_l_half' or K_change_scheme=='marbles_p_upper_l_half') and i not in allowed_cells:  # skip update of the K's in that cell since it is not at lower left half of domain
+                # print(f'cell #{i} skipped')
+                pass
+            else:  # update K's cell by cell
+                u_sub = u[4*i:4*(i+1)]  # velocities at particular cell
+                K_sub = K[4*i:4*(i+1)]  # conductivities at particular cell
+                if type(thresh) == np.ndarray:
+                    thresh_sub = thresh[4*i:4*(i+1)]
+                else:
+                    thresh_sub = copy.copy(thresh)
+                K_backg_sub = K_backg[4*i:4*(i+1)]  # background conductivities at particular cell
+                # change K's at particular cell
+                K_sub_nxt = ChangeKFromFlow_singleCell(u_sub, thresh_sub, K_sub, K_backg_sub, K_max, K_min, K_change_scheme)
+                K_nxt[4*i:4*(i+1)] = K_sub_nxt  # put them in the right place at K_nxt
     return K_nxt
 
 def ChangeKFromFlow_singleCell(u, thresh, K, K_backg, K_max, K_min, K_change_scheme):
@@ -225,11 +231,7 @@ def ChangeKFromFlow_singleCell(u, thresh, K, K_backg, K_max, K_min, K_change_sch
     K_nxt - 2D cubic array of conductivities with 4 elements on diag for next iteration
     """
 
-    if K_change_scheme == 'marbles_pressure':  # marbles move due to pressure difference delta_p
-        # delta_p = u / K  # pressure difference at edge
-        # p_thresh = thresh / K_max  # pressure difference threshold to move marble
-        # u_in_ind = np.where(delta_p>p_thresh)[0]  # all indices where u enters the cell at velocity 
-        #                                           # greater than threshold to move marble
+    if K_change_scheme == 'marbles_pressure' or K_change_scheme == 'marbles_p_lower_l_half' or K_change_scheme == 'marbles_p_upper_l_half':  # marbles move due to pressure difference delta_p
         # u_out_ind = np.where(delta_p==min(delta_p.T))[0]  # indices of minimal flow, possibly exiting the cell
         delta_p = u / K  # pressure difference at edge
         p_thresh = thresh / K_max  # pressure difference threshold to move marble

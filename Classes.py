@@ -44,8 +44,11 @@ class User_variables:
 					   'propto_current_squared' = conductivity on edge changes due to squared on edge (use beta argument), no marbles involves
 					   'marbles_pressure'       = conductivities in each cells change due to marbles moving due to pressure difference.
 					                              binary values K_min, K_max
+					   'marbles_p_lower_l_half' = like 'marbles_pressure' but the K's change only at lower left half of domain
+					   'marbles_p_upper_l_half' = like 'marbles_pressure' but the K's change only at upper left half of domain
 					   'marbles_u'              = conductivities in each cells change due to marbles moving due to flow velocity.
 					                              binary values K_min, K_max
+
 	K_type           - str, effect of flow on conductivity without changing marble positions
 					   'bidir'    = conductivity is the same regardless of flow directions
 					   'flow_dep' = conductivity depends on flow direction - if into cell then maximal, if out and there is a marble then lower
@@ -57,6 +60,7 @@ class User_variables:
 	                   'Cells' is Roie's style of network and is default
 	                   'Nachi' is Nachi style
 	u_thresh         - float, threshold to move marbles, default=1
+	u_thresh_noise_mag - float, amplitude of normal dist. noise added to each cell individually
 	fixed_nodes      - 1D array, numbers the nodes with fixed value assigned by fixed_node_p() function, for 'XOR' or '..._contrastive' tasks, default=0
 	K_max            - default=1, maximal conductivity value, i.e. the value of edge without marble
 	K_min            - default=0.5, minim conductivity value, i.e. the value of edge with marble
@@ -70,8 +74,8 @@ class User_variables:
 	"""
 
 	def __init__(self, NGrid, input_p, task_type, K_type, iterations, input_nodes_lst, output_nodes_lst, Periodic='False', net_typ='Cells', 
-		         u_thresh=1, fixed_nodes=0, K_max=1, K_min=0.5, beta=0.0, train_frac=0.0, desired_p_frac=0.0, etta=0.0, mag_factor=1.0,
-		         alpha=1.0, sub_task_type='None',
+		         u_thresh=1, u_thresh_noise_mag=0.0, fixed_nodes=0, K_scheme='marbles_pressure', K_max=1, K_min=0.5, beta=0.0, train_frac=0.0, 
+		         desired_p_frac=0.0, etta=0.0, mag_factor=1.0, alpha=1.0, sub_task_type='None',
 		         flow_scheme='None'):
 		self.NGrid = NGrid		
 		if len(input_p)==1:
@@ -95,7 +99,7 @@ class User_variables:
 			regression_data = np.array(np.meshgrid(np.arange(1,data_size), np.arange(1,data_size))).T.reshape(-1, 2)/data_size
 			regression_target = np.matmul(regression_data, desired_p_frac)
 			self.train_data, self.train_target, self.test_data, self.test_target = DatasetManipulations.divide_train_test(regression_data, regression_target, train_frac)
-			self.K_scheme = 'marbles_pressure'
+			self.K_scheme = K_scheme
 			self.flow_scheme = flow_scheme
 			if self.flow_scheme=='None':
 				self.flow_scheme = 'unidir'  # apply pressure drop only in the regular directions - constrained node = positive, ground = 0
@@ -119,13 +123,13 @@ class User_variables:
 		    self.flow_scheme = 'Contrastive'
 		    self.net_typ = 'Cells'
 		else:
-		    self.K_scheme = 'marbles_pressure'
-		    self.flow_scheme = flow_scheme
-		    self.alpha = np.ones(2)*alpha
-		    if self.flow_scheme == 'None':  # If user gave specific flow scheme
-		    	self.flow_scheme = 'unidir'  # apply pressure drop only in the regular directions - constrained node = positive, ground = 0
+			self.K_scheme = K_scheme
+			self.flow_scheme = flow_scheme
+			self.alpha = np.ones(2)*alpha
+			if self.flow_scheme == 'None':  # If user gave specific flow scheme
+				self.flow_scheme = 'unidir'  # apply pressure drop only in the regular directions - constrained node = positive, ground = 0
 		        	                         # there are 2 input and output pairs, exchange between them
-		    self.net_typ = 'Cells'
+			self.net_typ = 'Cells'
 		# additional sizes given specific tasks
 		if self.task_type == 'XOR' or self.task_type == 'Counter' or self.task_type == 'Allostery_contrastive' or self.task_type == 'Regression_contrastive':
 			self.fixed_nodes = fixed_nodes
@@ -155,13 +159,30 @@ class User_variables:
 		self.input_nodes_lst = input_nodes_lst
 		self.output_nodes_lst = output_nodes_lst
 		self.Periodic = Periodic
-		self.u_thresh = u_thresh  # for task_type=='Memristor' this is not u_thresh used. It is updated in self.update_u_thresh
+		self.u_thresh = u_thresh  # for task_type=='Memristor'/'Regression_contrastive'/'Allostery_contrastive' this is not u_thresh used. 
+								  # It is updated in self.update_u_thresh
+		self.u_thresh_noise_mag = u_thresh_noise_mag
 		self.K_type = K_type
 		self.K_max = K_max
 		self.K_min = K_min
 		self.beta = beta
 
 		self.sub_task_type = sub_task_type
+
+		if self.K_scheme=='marbles_p_lower_l_half':  # create array of ints denoting lower left half cells, whose K's will not change
+			allowed_cells = np.array([], dtype=int)  # Specify the dtype as int
+			for i in range(NGrid):  # run over all lines
+				# at each line from the bottom, allowed cells are from first one to diagonal
+				allowed_cells = np.append(allowed_cells, np.linspace(i * NGrid, (i + 1) * NGrid - i - 1, NGrid - i, dtype=int))
+			self.allowed_cells=allowed_cells
+		elif self.K_scheme=='marbles_p_upper_l_half':  # create array of ints denoting lower left half cells, whose K's will not change
+			allowed_cells = np.array([], dtype=int)  # Specify the dtype as int
+			for i in range(NGrid):  # run over all lines
+				# at each line from the bottom, allowed cells are from first one to diagonal
+				allowed_cells = np.append(allowed_cells, np.linspace(i * NGrid, i * NGrid + i, i + 1, dtype=int))
+			self.allowed_cells=allowed_cells
+		else:
+			self.allowed_cells=np.array([])
 
 	def assign_input_p(self, p):
 		"""
@@ -203,11 +224,24 @@ class User_variables:
 			print('no fixed nodes other than input')
 
 	def update_u_thresh(self, Strctr):
-		if self.task_type == 'Memristor':
+		"""
+		Update the threshold to move marble, from scalar to array.
+		For 'dual' scheme - add noise of magnitude self.u_thresh_noise_mag, just for edges that are not boundary
+		For memristor - threshold is 1 but just for edges that are not boundary
+
+		inputs:
+		Strctr    - class, network structure
+		"""
+		if self.task_type=='Allostery_contrastive' or self.task_type=='Regression_contrastive':
+			u_thresh_noise = rand.normal(size=self.NGrid*4) * self.u_thresh_noise_mag
+			u_thresh_updt = np.ones(Strctr.NE) 
+			u_thresh_updt[0:self.NGrid*4] = np.repeat(self.u_thresh, self.NGrid*4) + u_thresh_noise
+			u_thresh_updt[u_thresh_updt<0] = 1;  # correct for if there is negative threshold, not physical
+		elif self.task_type == 'Memristor':
 			u_thresh_updt = np.ones(Strctr.NE)
-			u_thresh_updt[0:self.NGrid*4] = np.repeat(self.u_thresh, 4)
-			self.u_thresh = u_thresh_updt
-			print(self.u_thresh)
+			u_thresh_updt[0:self.NGrid*4] = np.repeat(self.u_thresh, self.NGrid*4)
+		self.u_thresh = u_thresh_updt
+		print(self.u_thresh)
 
 
 class Net_structure:
@@ -440,13 +474,10 @@ class Net_state:
 		frac_moved = noise_amp  # fraction of marbles moved, on average
 		u_thresh = BigClass.Variabs.u_thresh  # float, threshold of flow above which marbles move
 
-		self.K_backg = K_max*np.ones([NE])
-		# print(self.K)
+		self.K_backg = K_max*np.ones([NE])  # K matrix for background, no change due to marbles
 		if BigClass.Variabs.task_type == 'Counter':
 			for i in range(BigClass.Variabs.NGrid-2):
 				self.K_backg[(i+1)*4+2] = K_max / ((BigClass.Variabs.NGrid - i - 2) * 3 - 2)
-			# print('background resistances')
-			# print(1/self.K_backg)
 			self.K = copy.copy(self.K_backg)
 		elif BigClass.Variabs.task_type == 'Memristor':  # use previous values for K
 			if len(self.K)>0:  # if a previous K exists
@@ -454,8 +485,7 @@ class Net_state:
 				pass
 			else:  # if not, create one
 				self.K = copy.copy(self.K_backg)
-		else:
-			self.K_backg = K_max*np.ones([NE])
+		else:  # initial K matrix is the background
 			self.K = copy.copy(self.K_backg)
 			
 		if noise == 'rand_u' or noise == 'rand_K':
@@ -561,8 +591,8 @@ class Net_state:
 			# if sim_type == 'w marbles' or sim_type == 'allostery test':  # Update conductivities
 			if sim_type == 'w marbles':  # Update conductivities
 				K_nxt = Matrixfuncs.ChangeKFromFlow(u_nxt, BigClass.Variabs.u_thresh, self.K, self.K_backg, BigClass.Variabs.NGrid, 
-													K_change_scheme=BigClass.Variabs.K_scheme, K_max=BigClass.Variabs.K_max, 
-													K_min=BigClass.Variabs.K_min, beta=BigClass.Variabs.beta)
+													K_change_scheme=BigClass.Variabs.K_scheme, allowed_cells=BigClass.Variabs.allowed_cells, 
+													K_max=BigClass.Variabs.K_max, K_min=BigClass.Variabs.K_min, beta=BigClass.Variabs.beta)
 				# print('calculated K, %d edges contain different values than before' % np.size(np.where(K_nxt-self.K)))
 				self.K_mat = np.eye(BigClass.Strctr.NE) * K_nxt
 				K_old = copy.copy(self.K)
@@ -600,6 +630,7 @@ class Net_state:
 		plot     - flag: 'no'   - do not plot anything
 		                 'yes'  - plot every iteration in Variabs.iterations
 		                 'last' - only last couple of steps, one for each input
+		                 'test' - only at iteration steps that have i%2==0
 		save_fig - str, 'yes' saves the figure plotted as png, 'no' doesn't. default='no'
 
 		output:
@@ -616,9 +647,9 @@ class Net_state:
 		EJ = copy.copy(BigClass.Strctr.EJ)
 		EIEJ_plots = copy.copy(BigClass.Strctr.EIEJ_plots)
 
-		print('BigClass.Variabs.fixed_nodes', BigClass.Variabs.fixed_nodes)
-		print('BigClass.Strctr.FixedNodes_full', BigClass.Strctr.FixedNodes_full)
-		print('BigClass.Strctr.FixedNodeData_full', BigClass.Strctr.FixedNodeData_full)
+		# print('BigClass.Variabs.fixed_nodes', BigClass.Variabs.fixed_nodes)
+		# print('BigClass.Strctr.FixedNodes_full', BigClass.Strctr.FixedNodes_full)
+		# print('BigClass.Strctr.FixedNodeData_full', BigClass.Strctr.FixedNodeData_full)
 
 		if BigClass.Variabs.task_type == 'Regression_contrastive' or BigClass.Variabs.task_type == 'Allostery_contrastive':
 			if BigClass.Variabs.flow_scheme == 'dual':
@@ -676,11 +707,11 @@ class Net_state:
 
 			NodeData, Nodes, EdgeData, Edges, GroundNodes = Constraints.Constraints_afo_task(BigClass.Variabs, BigClass.Strctr, self, sim_type, i, train_sample)
 
-			print('NodeData', NodeData)
-			print('Nodes', Nodes)
-			print('EdgeData', EdgeData)
-			print('Edges', Edges)
-			print('GroundNodes',  GroundNodes)
+			# print('NodeData', NodeData)
+			# print('Nodes', Nodes)
+			# print('EdgeData', EdgeData)
+			# print('Edges', Edges)
+			# print('GroundNodes',  GroundNodes)
 
 			# if BigClass.Variabs.task_type == 'Regression_contrastive':  # update input p for this loop step as calculated in Constraints_afo_task
 			# 	BigClass.Variabs.assign_input_p(NodeData)
@@ -699,7 +730,8 @@ class Net_state:
 
 			# Save data in assigned arrays
 			self.save_state_statistics(BigClass, sim_type, cyc_len, cycle, i, NodeData)
-			print('p_nudge after save_state_statistics', self.p_nudge)
+			# if BigClass.Variabs.task_type=='Allostery_contrastive' or BigClass.Variabs.task_type=='Regression_contrastive':
+				# print('p_nudge after save_state_statistics', self.p_nudge)
 
 			# if BigClass.Variabs.flow_scheme == 'dual':
 			# 	if i%2!=0:  # training change resistance step
@@ -714,7 +746,7 @@ class Net_state:
 			# 		self.outputs_vec[cycle+1] = self.p_outputs  # this is the output
 			
 			# Optionally plot
-			if plot == 'yes' or (plot == 'last' and (i == (iters - 1) or i == (iters - 2))):				
+			if plot == 'yes' or (plot == 'last' and (i == (iters - 1) or i == (iters - 2))) or (plot == 'test' and i%2==0):	
 				NETfuncs.PlotNetwork(self.p, self.u, self.K, BigClass, EIEJ_plots, NN, NE, 
 									nodes='no', edges='yes', pressureSurf='yes', savefig=savefig)
 				# NETfuncs.PlotNetwork(self.p, self.u, self.K, BigClass, EIEJ_plots, NN, NE, 
@@ -837,8 +869,8 @@ class Net_state:
 						self.p_dual_vec[int(np.floor(i/2))] = self.p_nudge
 						self.outputs_dual_vec[int(np.floor(i/2))] = self.outputs_dual
 						self.outputs_vec[int(np.floor(i/2))] = self.p_outputs
-						print('p dual all', self.p_dual_vec)
-						print('out dual all', self.outputs_dual_vec)
+						# print('p dual all', self.p_dual_vec)
+						# print('out dual all', self.outputs_dual_vec)
 					else:
 						print('desired_p ', desired_p)
 						print('p_nudge ', self.p_nudge)
