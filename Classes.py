@@ -54,14 +54,14 @@ class User_variables:
 					   'flow_dep' = conductivity depends on flow direction - if into cell then maximal, if out and there is a marble then lower
 	iterations       - int, # iterations allowed under flow cycles / updating conductivities
 	input_nodes_lst  - array of all input nodes in task, even when they switch roles. State.flow_iterate() will handle them.
-    output_nodes_lst - array of all output nodes in task, even when they switch roles. State.flow_iterate() will handle them.
+    ground_nodes_lst - array of all ground nodes in task, even when they switch roles. State.flow_iterate() will handle them.
 	Periodic         - bool, 'True'=lattice has periodic boundaries, default='False'
 	net_typ          - str, layout for NETfuncs plotNetStructure(). 
 	                   'Cells' is Roie's style of network and is default
 	                   'Nachi' is Nachi style
 	u_thresh         - float, threshold to move marbles, default=1
 	u_thresh_noise_mag - float, amplitude of normal dist. noise added to each cell individually
-	fixed_nodes      - 1D array, numbers the nodes with fixed value assigned by fixed_node_p() function, for 'XOR' or '..._contrastive' tasks, default=0
+	output_nodes     - 1D array, numbers the nodes with fixed value assigned by fixed_node_p() function, for 'XOR' or '..._contrastive' tasks, default=0
 	K_max            - default=1, maximal conductivity value, i.e. the value of edge without marble
 	K_min            - default=0.5, minim conductivity value, i.e. the value of edge with marble
 	beta             - default=0.0, multiplication factor in conductivity update scheme "propto_flow"
@@ -69,12 +69,12 @@ class User_variables:
 	sub_task_type    - default='None', another specification of task, for regression whether 2output or not etc.
 	flow_scheme      - str, if user knows flow scheme.
 					   'unidir' - input is input, output is output
-					   'taktak' - every 2nd cycle inputs and outputs switch. For "Allostery_constrastive" fixed nodes also switch
+					   'taktak' - every 2nd cycle inputs and outputs switch. For "Allostery_constrastive" output nodes also switch
 					              Reminder: for old allostery, the cycle is twice as long
 	"""
 
-	def __init__(self, NGrid, input_p, task_type, K_type, iterations, input_nodes_lst, output_nodes_lst, Periodic='False', net_typ='Cells', 
-		         u_thresh=1, u_thresh_noise_mag=0.0, fixed_nodes=0, K_scheme='marbles_pressure', K_max=1, K_min=0.5, beta=0.0, train_frac=0.0, 
+	def __init__(self, NGrid, input_p, task_type, K_type, iterations, input_nodes_lst, ground_nodes_lst, Periodic='False', net_typ='Cells', 
+		         u_thresh=1, u_thresh_noise_mag=0.0, output_nodes=0, K_scheme='marbles_pressure', K_max=1, K_min=0.5, beta=0.0, train_frac=0.0, 
 		         desired_p_frac=0.0, etta=0.0, mag_factor=1.0, alpha=1.0, sub_task_type='None',
 		         flow_scheme='None'):
 		self.NGrid = NGrid		
@@ -104,7 +104,7 @@ class User_variables:
 			if self.flow_scheme=='None':
 				self.flow_scheme = 'unidir'  # apply pressure drop only in the regular directions - constrained node = positive, ground = 0
 		        	                         # there are 2 input and output pairs, exchange between them
-			self.net_typ = 'Cells'  
+			self.net_typ = net_typ 
 			self.alpha = alpha                           
 		elif task_type == 'Allostery_one_pair':
 		    self.K_scheme = 'propto_current_squared'
@@ -129,12 +129,12 @@ class User_variables:
 			if self.flow_scheme == 'None':  # If user gave specific flow scheme
 				self.flow_scheme = 'unidir'  # apply pressure drop only in the regular directions - constrained node = positive, ground = 0
 		        	                         # there are 2 input and output pairs, exchange between them
-			self.net_typ = 'Cells'
+			self.net_typ = net_typ
 		# additional sizes given specific tasks
 		if self.task_type == 'XOR' or self.task_type == 'Counter' or self.task_type == 'Allostery_contrastive' or self.task_type == 'Regression_contrastive':
-			self.fixed_nodes = fixed_nodes
+			self.output_nodes = output_nodes
 			if self.task_type == 'Allostery_contrastive' or self.task_type == 'Regression_contrastive':
-				if np.size(desired_p_frac)>len(fixed_nodes)*len(input_nodes_lst):
+				if np.size(desired_p_frac)>len(output_nodes)*len(input_nodes_lst):
 					self.desired_p_frac = desired_p_frac[0]  # not in use for Regression, rather regression_target is used
 				else:
 					self.desired_p_frac = desired_p_frac  # not in use for Regression, rather regression_target is used
@@ -143,7 +143,7 @@ class User_variables:
 			else:
 				self.mag_factor = 1.0
 		else: 
-			self.fixed_nodes = array([])
+			self.output_nodes = array([])
 			self.mag_factor = 1.0
 
 		# num of iterations in every cycle, for calculation of convergence
@@ -157,7 +157,7 @@ class User_variables:
 		self.iterations = iterations
 		# self.input_output_pairs = input_output_pairs
 		self.input_nodes_lst = input_nodes_lst
-		self.output_nodes_lst = output_nodes_lst
+		self.ground_nodes_lst = ground_nodes_lst
 		self.Periodic = Periodic
 		self.u_thresh = u_thresh  # for task_type=='Memristor'/'Regression_contrastive'/'Allostery_contrastive' this is not u_thresh used. 
 								  # It is updated in self.update_u_thresh
@@ -206,7 +206,7 @@ class User_variables:
 
 	def assign_fixed_node_p(self, p):
 		"""
-		Assigns the values of the fixed nodes for XOR task
+		Assigns the values of the fixed nodes for counter and XOR tasks
 		values of fixed nodes are p/3 and 2*p/3, these could be modified...
 
 		input:
@@ -311,16 +311,14 @@ class Net_structure:
 		Setup_constraints sets up the constraints on the network for specific run, in form of 2D arrays
 
 		inputs:
-		input_output_pairs - array of input and output node pairs. State.flow_iterate() will know how to handle them.
-		fixed_nodes        - 1D array, numbers the nodes with fixed value assigned by fixed_node_p() function, for 'XOR' task, default=0
-		input_p            - float, B.C. pressure at input node
+		BigClass - class instance including the user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
 
 		outputs:
 		output_edges               - 1D array, all output edge numbers in flow scheme
 		InNodeData_full            - 1D array, all input node pressures in flow scheme
 		InNodes_full               - 1D array, all input node numbers in flow scheme
-		FixedNodeData_full         - 1D array, all fixed node pressures in flow scheme
-		FixedNodes_full            - 1D array, all fixed node numbers in flow scheme
+		OutputNodeData_full        - 1D array, all fixed node pressures in flow scheme, mostly used as output (see specific task)
+		OutputNodes_full           - 1D array, all fixed node numbers in flow scheme, mostly used as output (see specific task)
 		GroundNodes_full           - 1D array, all node numbers with fixed value 0 for pressure in training stages
 		GroundNodes_full_Allostery - 1D array, all node numbers with fixed value 0 for pressure in allostery test stage
 		EdgeData_full              - 1D array, all fixed edge pressure drops in flow scheme
@@ -329,16 +327,15 @@ class Net_structure:
 
 		# dummy variab for ease
 		InNodes_full = copy.copy(BigClass.Variabs.input_nodes_lst)  # input p node
-		GroundNodes_full = copy.copy(BigClass.Variabs.output_nodes_lst)  # output node has 0 pressure
+		GroundNodes_full = copy.copy(BigClass.Variabs.ground_nodes_lst)  # output node has 0 pressure
 		# in_out_pairs = copy.copy(BigClass.Variabs.input_output_pairs)
-		fixed_nodes = copy.copy(BigClass.Variabs.fixed_nodes)  # nodes with fixed p
+		output_nodes = copy.copy(BigClass.Variabs.output_nodes)  # nodes with fixed p
 
 		# lengths
-		if np.size(fixed_nodes)>0:
-			# len_fixed = np.shape(fixed_nodes)[1]
-			len_fixed = np.shape(fixed_nodes)[0]
+		if np.size(output_nodes)>0:
+			len_output = np.shape(output_nodes)[0]
 		else:
-			len_fixed = 0
+			len_output = 0
 
 		# # create constraints
 		# input p value
@@ -347,21 +344,18 @@ class Net_structure:
 		else:  # if p is vector of many inputs
 			InNodeData_full = BigClass.Variabs.input_p 
 
-		# if fixed nodes exist, use them:
-		if len_fixed>0:
+		# if output nodes exist, use them:
+		if len_output>0:
 			if 'BigClass.Variabs.fixed_node_p' in locals():
-				FixedNodeData_full = array([BigClass.Variabs.fixed_node_p[i] for i in range(len_fixed)])  # input p value
+				OutputNodeData_full = array([BigClass.Variabs.output_node_p[i] for i in range(len_output)])  # input p value
 			else:
-				FixedNodeData_full = np.zeros(len_fixed)
+				OutputNodeData_full = np.zeros(len_output)
 			# input p node
-			# FixedNodes_full = array([fixed_nodes[0, i] for i in range(len_fixed)])  
-			FixedNodes_full = copy.copy(fixed_nodes)
+			OutputNodes_full = copy.copy(output_nodes)
 		else:
-			FixedNodeData_full = array([])
-			FixedNodes_full = array([])
+			OutputNodeData_full = array([])
+			OutputNodes_full = array([])
 		# nodes with zero pressure
-		# GroundNodes_full = array([[in_out_pairs[i, 1]] for i in range(len_in_out_pairs)])  
-		# GroundNodes_full_Allostery = array([GroundNodes_full[i][0] for i in range(len(GroundNodes_full))])
 		EdgeData_full = array([0, 0])  # pressure drop value on edges specified by Edges_full
 		# Full list of edges that have specified pressure drop. it is different from EdgesTotal only if
 		# there are non-zero boundary conditions at periphery of network.
@@ -374,10 +368,10 @@ class Net_structure:
 		Edges_full = copy.copy(self.EdgesTotal)
 
 		# output edges which are ground node but don't have to be in middle of cell
-		if BigClass.Variabs.task_type == 'Allostery_contrastive' or BigClass.Variabs.task_type == 'Regression_contrastive':  # for regression task in Nachi&Sam method, outputs are the fixed nodes. 
-																    														 # They are fixed only every 2nd iteration, from "Constraints.constaints_afo_task".
-			self.output_edges = array([np.where(np.append(self.EI, self.EJ)==FixedNodes_full[i])[0] % len(self.EI) 
-		                               for i in range(len(FixedNodes_full))])
+		if BigClass.Variabs.task_type == 'Allostery_contrastive' or BigClass.Variabs.task_type == 'Regression_contrastive':  # for regression task in Nachi&Sam method, outputs are the output nodes. 
+																    														 # They are output only every 2nd iteration, from "Constraints.constaints_afo_task".
+			self.output_edges = array([np.where(np.append(self.EI, self.EJ)==OutputNodes_full[i])[0] % len(self.EI) 
+		                               for i in range(len(OutputNodes_full))])
 			self.input_edges = array([np.where(np.append(self.EI, self.EJ)==InNodes_full[i])[0] % len(self.EI) 
 		                               for i in range(len(InNodes_full))])
 			self.ground_edges = array([np.where(np.append(self.EI, self.EJ)==GroundNodes_full[i])[0] % len(self.EI) 
@@ -389,13 +383,13 @@ class Net_structure:
 		# add all B.C.s to Strctr instance
 		self.InNodeData_full = InNodeData_full
 		self.InNodes_full = InNodes_full
-		# If there are nodes with fixed pressure which are not input/output (for 'XOR' or '..._contrastive' for example)
-		if len_fixed>0:
-			self.FixedNodeData_full = FixedNodeData_full
-			self.FixedNodes_full = FixedNodes_full
+		# If there are nodes with output pressure which are not input/output (for 'XOR' or '..._contrastive' for example)
+		if len_output>0:
+			self.OutputNodeData_full = OutputNodeData_full
+			self.OutputNodes_full = OutputNodes_full
 		else:
-			self.FixedNodeData_full = array([])
-			self.FixedNodes_full = array([])
+			self.OutputNodeData_full = array([])
+			self.OutputNodes_full = array([])
 		self.GroundNodes_full = GroundNodes_full
 		# self.GroundNodes_full_Allostery = GroundNodes_full_Allostery
 		self.EdgeData_full = EdgeData_full
@@ -500,7 +494,7 @@ class Net_state:
 		if BigClass.Variabs.task_type == 'Counter':  # for counter task, allow marble to get stuck at boundary edge (not input or output)
 			bc_nodes_full = [BigClass.Strctr.InNodes_full,  BigClass.Strctr.GroundNodes_full]
 		else:  # for all other tasks, no marbles to get stuck at boundary edge
-			bc_nodes_full = [BigClass.Strctr.InNodes_full, BigClass.Strctr.FixedNodes_full, BigClass.Strctr.GroundNodes_full]
+			bc_nodes_full = [BigClass.Strctr.InNodes_full, BigClass.Strctr.OutputNodes_full, BigClass.Strctr.GroundNodes_full]
 		for i in bc_nodes_full:
 			self.fixK(BigClass, i)
 		self.K_mat = np.eye(BigClass.Strctr.NE) * self.K
@@ -564,7 +558,7 @@ class Net_state:
 		uses solve_flow_const_K()
 
 		inputs:
-		BigClass -       class instance including the user variables (Variabs), network structure (Strctr) and networkx (NET) class instances
+		BigClass -       class instance including the user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
 				         I will not go into everything used from there to save space here.
 	    u              - 1D array sized [NE + constraints, ], flow at each edge at beginning of iteration
         Cstr           - 2D array without last column (which is f from Rocks and Katifori 2018)
@@ -620,7 +614,7 @@ class Net_state:
 		Optionally plots the network as a networkx graph
 
 		input:
-		BigClass - class instance including the user variables (Variabs), network structure (Strctr) and networkx (NET) class instances
+		BigClass - class instance including the user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
 				   I will not go into everything used from there to save space here.
 		sim_type - simulation type: 'no marbles'     - flows from 1 input at a time and all outputs, all edges have high State.K
 		                            'allostery test' - flows from 1 input at a time and all outputs, K's as in State.K
@@ -647,9 +641,9 @@ class Net_state:
 		EJ = copy.copy(BigClass.Strctr.EJ)
 		EIEJ_plots = copy.copy(BigClass.Strctr.EIEJ_plots)
 
-		# print('BigClass.Variabs.fixed_nodes', BigClass.Variabs.fixed_nodes)
-		# print('BigClass.Strctr.FixedNodes_full', BigClass.Strctr.FixedNodes_full)
-		# print('BigClass.Strctr.FixedNodeData_full', BigClass.Strctr.FixedNodeData_full)
+		# print('BigClass.Variabs.output_nodes', BigClass.Variabs.output_nodes)
+		# print('BigClass.Strctr.OutputNodes_full', BigClass.Strctr.OutputNodes_full)
+		# print('BigClass.Strctr.OutputNodeData_full', BigClass.Strctr.OutputNodeData_full)
 
 		if BigClass.Variabs.task_type == 'Regression_contrastive' or BigClass.Variabs.task_type == 'Allostery_contrastive':
 			if BigClass.Variabs.flow_scheme == 'dual':
@@ -695,16 +689,6 @@ class Net_state:
 				train_sample = np.array([])			
 
 			# specific constraints for training step	
-			# NodeData, Nodes, EdgeData, Edges, GroundNodes = Constraints.Constraints_afo_task(BigClass.Variabs.task_type, BigClass.Variabs.flow_scheme, 
-			# 	                                                                             sim_type, BigClass.Strctr.InNodeData_full, 
-			# 	                                                                             BigClass.Strctr.InNodes_full, 
-			# 	                                                                             BigClass.Strctr.FixedNodeData_full, 
-			# 	                                                                             BigClass.Strctr.FixedNodes_full, 
-			# 	                                                                             BigClass.Strctr.GroundNodes_full, 
-			# 	                                                                             BigClass.Strctr.EdgeData_full, 
-			# 	                                                                             BigClass.Strctr.Edges_full, i, train_sample, self.p_nudge,
-			# 	                                                                             BigClass.Variabs.mag_factor)
-
 			NodeData, Nodes, EdgeData, Edges, GroundNodes = Constraints.Constraints_afo_task(BigClass.Variabs, BigClass.Strctr, self, sim_type, i, train_sample)
 
 			# print('NodeData', NodeData)
@@ -712,10 +696,6 @@ class Net_state:
 			# print('EdgeData', EdgeData)
 			# print('Edges', Edges)
 			# print('GroundNodes',  GroundNodes)
-
-			# if BigClass.Variabs.task_type == 'Regression_contrastive':  # update input p for this loop step as calculated in Constraints_afo_task
-			# 	BigClass.Variabs.assign_input_p(NodeData)
-			# 	print(BigClass.Variabs.input_p)
 
 			# BC and constraints as matrix
 			Cstr_full, Cstr, f = Constraints.ConstraintMatrix(NodeData, Nodes, EdgeData, Edges, GroundNodes, 
@@ -732,18 +712,6 @@ class Net_state:
 			self.save_state_statistics(BigClass, sim_type, cyc_len, cycle, i, NodeData)
 			# if BigClass.Variabs.task_type=='Allostery_contrastive' or BigClass.Variabs.task_type=='Regression_contrastive':
 				# print('p_nudge after save_state_statistics', self.p_nudge)
-
-			# if BigClass.Variabs.flow_scheme == 'dual':
-			# 	if i%2!=0:  # training change resistance step
-			# 		if BigClass.Variabs.task_type == 'Allostery_contrastive':
-			# 			delta = BigClass.Variabs.alpha * (self.error_vec[cycle])
-			# 		elif BigClass.Variabs.task_type == 'Regression_contrastive':
-			# 			delta = BigClass.Variabs.alpha * (loss[0]-loss[1])
-			# 		self.p_dual_vec[cycle+1] = self.p_dual[cycle] - np.sum(delta)
-			# 		self.outputs_dual_vec[cycle+1] = outputs_dual_vec[cycle] + delta
-			# 	else:  # training measure step
-			# 		self.p_vec[cycle+1] = NodeData
-			# 		self.outputs_vec[cycle+1] = self.p_outputs  # this is the output
 			
 			# Optionally plot
 			if plot == 'yes' or (plot == 'last' and (i == (iters - 1) or i == (iters - 2))) or (plot == 'test' and i%2==0):	
@@ -813,7 +781,7 @@ class Net_state:
 		save_state_statistics saves relevant data regarding network state in State class instance, e.g. p, u, Power dissip.
 
 		inputs:
-		BigClass - class instance including the user variables (Variabs), network structure (Strctr) and networkx (NET) class instances
+		BigClass - class instance including the user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
 				    I will not go into everything used from there to save space here.
 		sim_type - str, simulation type, see flow_iterate() function for descrip.
 		cyc_len  - int, num of iterations in every circle, for calculation of convergence
@@ -834,12 +802,12 @@ class Net_state:
 			self.K_all[:, i] = self.K
 			self.K_cells[:, i] = Matrixfuncs.K_by_cells(self.K, BigClass.Variabs.K_min, BigClass.Variabs.NGrid)
 			if BigClass.Variabs.task_type == 'Allostery_contrastive' or BigClass.Variabs.task_type == 'Regression_contrastive':
-				self.p_outputs = array([self.p[k][0] for k in BigClass.Strctr.FixedNodes_full])
+				self.p_outputs = array([self.p[k][0] for k in BigClass.Strctr.OutputNodes_full])
 				if BigClass.Variabs.task_type == 'Allostery_contrastive':
 					desired_p = BigClass.Variabs.desired_p
 					self.u_out = array([np.sum(self.u[BigClass.Strctr.output_edges[0]]), np.sum(self.u[BigClass.Strctr.output_edges[1]])])
 					self.u_final = array([np.sum(self.u[BigClass.Strctr.ground_edges]), np.sum(self.u[BigClass.Strctr.input_edges])])
-					# print('total flow throguh output', self.u_final/NodeData[0], ' flow normalized by input pressure')
+					# print('total flow through output', self.u_final/NodeData[0], ' flow normalized by input pressure')
 					self.u_final_vec[i,:] = self.u_final
 				elif BigClass.Variabs.task_type == 'Regression_contrastive':
 					desired_p = BigClass.Variabs.train_target[cycle]

@@ -52,6 +52,7 @@ def build_incidence(Variabs):
     b = Variabs.NGrid
     typ = Variabs.net_typ
     Periodic = Variabs.Periodic
+    print('Periodic', Periodic)
 
     if typ == 'Cells':  # Roie style
         
@@ -107,53 +108,84 @@ def build_incidence(Variabs):
         for i in range(b-1):
             for j in range(a-1):
                 EI.append(i*a + j)
-                EJ.append(i*a + j + 1)
+                EJ.append(i*a + j + 1)  # connecting to the right
                 EI.append(i*a + j)
-                EJ.append((i+1)*a + j)
-            EI.append(i*a + a-1)
+                EJ.append((i+1)*a + j)  # connecting down one row
+            EI.append(i*a + a-1)  # rightmost nodes only down
             EJ.append((i+1)*a + a-1)
-        for j in range(a-1):
+        for j in range(a-1):  # bottom row only to the right
                 EI.append((b-1)*a + j)
                 EJ.append((b-1)*a + j + 1)
         NE0 = len(EI)
                 
-        if Periodic:
-            for j in range(a):
-                EI.append(j)
-                EJ.append((b-1)*a + j)     
-                
-            for i in range(b):
-                EI.append(i*a)
-                EJ.append(i*a + a-1) 
+        # if Variabs.Periodic==True:
+        #     print('Periodic True')
+        #     for j in range(a):
+        #         EI.append(j)
+        #         EJ.append((b-1)*a + j)     
+        #     for i in range(b):
+        #         print(f'under periodic i={i}, j={j}')
+        #         print('EI', EI)
+        #         print('EJ', EJ)
+        #         EI.append(i*a)
+        #         EJ.append(i*a + a-1) 
+
+    elif typ == 'FC':
+
+        Nground = len(Variabs.input_nodes_lst) + len(Variabs.output_nodes) - 1
+        EI = []
+        EJ = []
+
+        # connect inputs to outputs
+        for i, inNode in enumerate(Variabs.input_nodes_lst):
+            for j, outNode in enumerate(Variabs.output_nodes):
+                EI.append(inNode)
+                EJ.append(outNode)
+
+        # connect input to ground
+        for i, inNode in enumerate(Variabs.input_nodes_lst):
+            EI.append(inNode)
+            EJ.append(Nground)
+
+        # connect output to ground
+        for i, outNode in enumerate(Variabs.output_nodes):
+            EI.append(outNode)
+            EJ.append(Nground)
                 
     EI = array(EI)
     EJ = array(EJ)
     NE = len(EI)
+    print('EI', EI)
+    print('EJ', EJ)
+    print('NE', NE)
 
     # delete unrelated boundary edges and correct for nodes, only for Nachi style
-    if typ == 'Nachi':
-        # boundaries are not connected, remove them
-        boundary_edges = arange(1, NE-a, 2*a-1)  # left boundary
-        boundary_edges = np.append(boundary_edges, arange(0, 2*a-2, 2))  # top boundary
-        boundary_edges = np.append(boundary_edges, arange(2*a-2, NE-a+1, 2*a-1))  # right boundary
-        boundary_edges = np.append(boundary_edges, arange(NE-a+1, NE, 1))  # bottom boundary
+    # if typ == 'Nachi':
+    #     # boundaries are not connected, remove them
+    #     boundary_edges = arange(1, NE-a, 2*a-1)  # left boundary
+    #     boundary_edges = np.append(boundary_edges, arange(0, 2*a-2, 2))  # top boundary
+    #     boundary_edges = np.append(boundary_edges, arange(2*a-2, NE-a+1, 2*a-1))  # right boundary
+    #     boundary_edges = np.append(boundary_edges, arange(NE-a+1, NE, 1))  # bottom boundary
 
+    #     EI = np.delete(EI, boundary_edges)
+    #     EJ = np.delete(EJ, boundary_edges)
 
-        EI = np.delete(EI, boundary_edges)
-        EJ = np.delete(EJ, boundary_edges)
-
-        EI[EI>a*(b-1)] = EI[EI>a*(b-1)] - 1
-        EJ[EJ>a*(b-1)] = EJ[EJ>a*(b-1)] - 1
-        EI[EI>a-2] = EI[EI>a-2]-1
-        EJ[EJ>a-2] = EJ[EJ>a-2]-1
-        EI = EI - 1
-        EJ = EJ - 1
+    #     EI[EI>a*(b-1)] = EI[EI>a*(b-1)] - 1
+    #     EJ[EJ>a*(b-1)] = EJ[EJ>a*(b-1)] - 1
+    #     EI[EI>a-2] = EI[EI>a-2]-1
+    #     EJ[EJ>a-2] = EJ[EJ>a-2]-1
+    #     EI = EI - 1
+    #     EJ = EJ - 1
             
-        NE = len(EI)
-        NN = NN - 4
+    #     NE = len(EI)
+    #     NN = NN - 4
             
     # for plots
     EIEJ_plots = [(EI[i], EJ[i]) for i in range(len(EI))]
+
+    print('EI after', EI)
+    print('EJ after', EJ)
+    print('NE after', NE)
     
     DM = zeros([NE, NN])  # Incidence matrix
     for i in range(NE):
