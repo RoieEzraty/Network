@@ -113,25 +113,53 @@ def calc_ratio_loss(output, target, input_p):
 	return ratio_loss
 
 
-def calculate_p_nudge(BigClass, state, p_output, p_desired):
+def calculate_p_nudge(BigClass, State, error=0.0, p_in=0.0, error_prev=0.0, p_in_prev=0.0):
 	"""
-	calculate_extra_p_learning calculates the additional pressure to add to fixed nodes in contrastive learning
+	calculate_p_nudge calculates the nudged pressure - whether in contrastive learning or dual problem
 
 	inputs:
 	BigClass  - class instance with all relevant data
-	p_output  - 1d array of measured outputs at output nodes (named "FixedNodes_full")
 	p_desired - 1d array of desired outputs at output nodes
-	etta      - amplitude of nudge
+	error     - 1d array of error from desired measure for the dual case, sized [2,]
 
 	outputs:
 	p_nudge - 1d array of pressure values to be assigned to output nodes, for the clamped stage
 	"""
 	if BigClass.Variabs.flow_scheme=='dual':
-		p_nudge = error_vec
+		print('p_nudge', State.p_nudge)
+		print('error', error)
+		if BigClass.Variabs.task_type=='Allostery_contrastive':
+			p_nudge = State.p_nudge - np.dot(BigClass.Variabs.alpha, error)
+			outputs_dual = State.outputs_dual + BigClass.Variabs.alpha * error
+		elif BigClass.Variabs.task_type=='Regression_contrastive':
+			# p_nudge = State.p_nudge - BigClass.Variabs.alpha * error
+			print('p_in', p_in)
+			print('error_prev', error_prev)
+			print('p_in_prev', p_in_prev)
+			p_nudge = State.p_nudge - BigClass.Variabs.alpha * (p_in - p_in_prev) * (error - error_prev)
+			print('State.outputs_dual', State.outputs_dual)
+			outputs_dual = State.outputs_dual + BigClass.Variabs.alpha * (error - error_prev)
+			print('outputs_dual next', outputs_dual)
+		return p_nudge, outputs_dual
 	else:
-		p_nudge = BigClass.Variabs.etta*p_desired + (1-BigClass.Variabs.etta)*p_output
-	return p_nudge
+		p_nudge = BigClass.Variabs.etta*BigClass.Variabs.p_desired + (1-BigClass.Variabs.etta)*State.p_outputs
+		return p_nudge
 
+# def calculate_outputs_dual(BigClass, outputs_dual_prev, error):
+# 	"""
+# 	calculate_output_dual calculates the nudged outputs - dual problem
+
+# 	inputs:
+# 	BigClass - class instance with all relevant data
+# 	state    - 1d array of measured outputs at output nodes
+# 	error    - 1d array of error from desired measure for the dual case, sized [2,]
+
+# 	outputs:
+# 	p_nudge - 1d array of pressure values to be assigned to output nodes, for the clamped stage
+# 	"""
+# 	if BigClass.Variabs.flow_scheme=='dual':
+# 		outputs_dual = outputs_dual_prev + BigClass.Variabs.alpha * error
+# 	return outputs_dual
 
 def shear_type(u):
 	"""
