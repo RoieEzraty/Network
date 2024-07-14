@@ -6,29 +6,28 @@ from numpy import array as array
 import copy
 
 def ConstraintMatrix(NodeData, Nodes, EdgeData, Edges, GroundNodes, NN, EI, EJ):
-    ####
-    # Builds constraint matrix, 
-    # for constraints on edge voltage drops: 1 at input node index, -1 at output and voltage drop at NN+1 index, for every row
-    # For constraints on node voltages: 1 at constrained node index, voltage at NN+1 index, for every row
-    # For ground nodes: 1 at ground node index, 0 else.
-    # Inputs
-    #
-    # NodeData    = 1D array at length as "Nodes" corresponding to pressures at each node from "Nodes"
-    # Nodes       = 1D array of nodes that have a constraint
-    # EdgeData    = 1D array at length "Edges" corresponding to pressure drops at each edge from "Edges"
-    # Edges       = 1D array of edges that have a constraint
-    # GroundNodes = 1D array of nodes that have a constraint of ground (outlet)
-    # NN          = int, number of nodes in network
-    # EI          = 1D array of nodes at each edge beginning
-    # EJ          = 1D array of nodes at each edge ending corresponding to EI
-    #
-    # outputs
-    #
-    # Cstr_full = 2D array sized [Constraints, NN + 1] representing constraints on nodes and edges. last column is value of constraint
-    #             (p value of row contains just +1. pressure drop if row contains +1 and -1)
-    # Cstr      = 2D array without last column (which is f from Rocks and Katifori 2018 https://www.pnas.org/cgi/doi/10.1073/pnas.1806790116)
-    # f         = constraint vector (from Rocks and Katifori 2018)
-    
+    """
+    Builds constraint matrix, 
+    for constraints on edge voltage drops: 1 at input node index, -1 at output and voltage drop at NN+1 index, for every row
+    For constraints on node voltages: 1 at constrained node index, voltage at NN+1 index, for every row
+    For ground nodes: 1 at ground node index, 0 else.
+
+    Inputs:
+    NodeData    = 1D array at length as "Nodes" corresponding to pressures at each node from "Nodes"
+    Nodes       = 1D array of nodes that have a constraint
+    EdgeData    = 1D array at length "Edges" corresponding to pressure drops at each edge from "Edges"
+    Edges       = 1D array of edges that have a constraint
+    GroundNodes = 1D array of nodes that have a constraint of ground (outlet)
+    NN          = int, number of nodes in network
+    EI          = 1D array of nodes at each edge beginning
+    EJ          = 1D array of nodes at each edge ending corresponding to EI
+
+    outputs:
+    Cstr_full = 2D array sized [Constraints, NN + 1] representing constraints on nodes and edges. last column is value of constraint
+             (p value of row contains just +1. pressure drop if row contains +1 and -1)
+    Cstr      = 2D array without last column (which is f from Rocks and Katifori 2018 https://www.pnas.org/cgi/doi/10.1073/pnas.1806790116)
+    f         = constraint vector (from Rocks and Katifori 2018)
+    """
     # ground nodes
     csg = len(GroundNodes)
     idg = arange(csg)
@@ -60,6 +59,7 @@ def ConstraintMatrix(NodeData, Nodes, EdgeData, Edges, GroundNodes, NN, EI, EJ):
     f[NN:,0] = CStr[:,-1]
 
     return CStr, CStr[:,:-1], f
+
 
 def build_input_output_and_ground(task_type, sub_task_type, row, NGrid, Nin=2, Nout=2):
     """
@@ -145,6 +145,7 @@ def build_input_output_and_ground(task_type, sub_task_type, row, NGrid, Nin=2, N
         output_nodes = array([])
     return input_nodes_lst, ground_nodes_lst, output_nodes
 
+
 def Constraints_afo_task(Variabs, Strctr, State, sim_type, i, train_sample):
     """
     Constraints_afo_task sets up the constraints on nodes and edges for specific learning task, and for specific step.
@@ -174,7 +175,7 @@ def Constraints_afo_task(Variabs, Strctr, State, sim_type, i, train_sample):
     Edges_full = copy.copy(Strctr.Edges_full)
 
 
-    if task_type == 'Allostery_contrastive' or task_type == 'Regression_contrastive':
+    if task_type == 'Allostery_contrastive' or task_type == 'Regression_contrastive' or task_type == 'dual_no_cell':
         m = i % 2  # iterate between 1st and 2nd inputs
         if np.shape(State.p_nudge)==np.shape(OutputNodeData_full):  # account for size of user input
             State.p_nudge = np.ones(np.shape(OutputNodeData_full))*State.p_nudge
@@ -197,7 +198,7 @@ def Constraints_afo_task(Variabs, Strctr, State, sim_type, i, train_sample):
                 else:
                     OutputNodeData_full_nudged = State.p_nudge
                 NodeData, Nodes = np.append(InNodeData_full, OutputNodeData_full_nudged)*Variabs.mag_factor, np.append(InNodes_full, OutputNodes_full)
-            elif task_type == 'Regression_contrastive':  # no sample of new training point for allostery task
+            elif task_type == 'Regression_contrastive' or task_type == 'dual_no_cell':  # sample new training point for Regression task
                 if flow_scheme == 'dual':
                     InNodeData_full = State.p_nudge
                     OutputNodeData_full_nudged = State.outputs_dual

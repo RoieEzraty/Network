@@ -30,16 +30,21 @@ class User_variables:
                        'taktak'   = apply pressure drop unidir once, meaning 1st input and output pair and then 2nd pair.
                                     then switch ground and constrained nodes to apply oposite dir.
 	task_type        - str, task that is being simulated
-					   'Allostery_one_pair'  = 1 pair of input and outputs
-					   'Allostery'           = 2 pairs of input and outputs
-					   'XOR'                 = 2 inputs and 2 outputs. difference between output nodes encodes the XOR result of the 2 inputs
-					   'Channeling_diag'     = 1st from input to diagonal output, then from output to 2 perpindicular nodes. 
-                                               test from input to output
-                       'Channeling_straight' = 1st from input to output on same column, then from output to 2 perpindicular nodes. 
-                                               test from input to output (same as 1st)
-                	   'Counter'             = column of cells bottomost and topmost nodes are input/output (switching), 
-                                               rightmost nodes (1 each row) ground. more about the task in "_counter.ipynb".
-                       'Iris'                = classification, sklearn's iris dataset, 4 inputs 3 output classes
+					   'dual_no_cell'           = dual scheme x=M*p_in with Nin input pressures, Nout outputs and 1 ground
+					   							  p_in assigned at Matrixfuncs.create_regression_dataset, M defined by desired_p_frac
+					   'Allostery_contrastive'  = 1 input_p=1, 2 outputs = A*p_in,B*p_in, A,B defined by desired_p_frac
+					   'Regression_contrastive' = 2 input_p, 1 output = A*p_1+B*p_2, p_in assigned at Matrixfuncs.create_regression_dataset
+					   							  A,B defined by desired_p_frac
+					   'Allostery_one_pair'     = 1 pair of input and outputs
+					   'Allostery'              = 2 pairs of input and outputs
+					   'XOR'                    = 2 inputs and 2 outputs. difference between output nodes encodes the XOR result of the 2 inputs
+					   'Channeling_diag'        = 1st from input to diagonal output, then from output to 2 perpindicular nodes. 
+                                                  test from input to output
+                       'Channeling_straight'    = 1st from input to output on same column, then from output to 2 perpindicular nodes. 
+                                                  test from input to output (same as 1st)
+                	   'Counter'                = column of cells bottomost and topmost nodes are input/output (switching), 
+                                                  rightmost nodes (1 each row) ground. more about the task in "_counter.ipynb".
+                       'Iris'                   = classification, sklearn's iris dataset, 4 inputs 3 output classes
 	K_scheme         - str, scheme to change conductivities
 					   'propto_current_squared' = conductivity on edge changes due to squared on edge (use beta argument), no marbles involves
 					   'marbles_pressure'       = conductivities in each cells change due to marbles moving due to pressure difference.
@@ -59,6 +64,7 @@ class User_variables:
 	net_typ          - str, layout for NETfuncs plotNetStructure(). 
 	                   'Cells' is Roie's style of network and is default
 	                   'Nachi' is Nachi style
+	                   'FC' is fully connected with Nin input nodes, Nout output nodes and 1 ground
 	u_thresh         - float, threshold to move marbles, default=1
 	u_thresh_noise_mag - float, amplitude of normal dist. noise added to each cell individually
 	output_nodes     - 1D array, numbers the nodes with fixed value assigned by fixed_node_p() function, for 'XOR' or '..._contrastive' tasks, default=0
@@ -73,9 +79,9 @@ class User_variables:
 					              Reminder: for old allostery, the cycle is twice as long
 	"""
 
-	def __init__(self, NGrid, input_p, task_type, K_type, iterations, input_nodes_lst, ground_nodes_lst, Periodic='False', net_typ='Cells', 
-		         u_thresh=1, u_thresh_noise_mag=0.0, output_nodes=0, K_scheme='marbles_pressure', K_max=1, K_min=0.5, beta=0.0, train_frac=0.0, 
-		         desired_p_frac=0.0, etta=0.0, mag_factor=1.0, alpha=1.0, sub_task_type='None',
+	def __init__(self, NGrid, input_p, task_type, K_type, iterations, input_nodes_lst, ground_nodes_lst, Nin=1, Nout=1, Periodic='False', 
+				 net_typ='Cells', u_thresh=1, u_thresh_noise_mag=0.0, output_nodes=0, K_scheme='marbles_pressure', K_max=1, K_min=0.5, 
+				 beta=0.0, train_frac=0.0, desired_p_frac=0.0, etta=0.0, mag_factor=1.0, alpha=1.0, sub_task_type='None',
 		         flow_scheme='None'):
 		self.NGrid = NGrid		
 		if len(input_p)==1:
@@ -94,9 +100,9 @@ class User_variables:
 		                                 # there are 2 input and output pairs, exchange between them
 			self.net_typ = 'Cells'
 		elif task_type == 'Regression_contrastive':
-			data_size=15
+			data_size_each_axis=15  # size of training set is data_size**2, don't have to cover all of it
 			# regression_data = DatasetManipulations.cartesian(([np.arange(1,data_size), np.arange(1,data_size)]))/data_size
-			regression_data = np.array(np.meshgrid(np.arange(1,data_size), np.arange(1,data_size))).T.reshape(-1, 2)/data_size
+			regression_data = np.array(np.meshgrid(np.arange(1,data_size_each_axis), np.arange(1,data_size_each_axis))).T.reshape(-1, 2)/data_size_each_axis
 			regression_target = np.matmul(regression_data, desired_p_frac)
 			self.train_data, self.train_target, self.test_data, self.test_target = DatasetManipulations.divide_train_test(regression_data, regression_target, train_frac)
 			self.K_scheme = K_scheme
@@ -105,7 +111,19 @@ class User_variables:
 				self.flow_scheme = 'unidir'  # apply pressure drop only in the regular directions - constrained node = positive, ground = 0
 		        	                         # there are 2 input and output pairs, exchange between them
 			self.net_typ = net_typ 
-			self.alpha = alpha                           
+			self.alpha = alpha 
+		elif task_type == 'dual_no_cell':
+			self.Nin = Nin
+			self.Nout = Nout
+			data_size_each_axis=15  # size of training set is data_size**Nin, don't have to cover all of it
+			self.train_data, self.train_target, self.test_data, self.test_target = Matrixfuncs.create_regression_dataset(data_size_each_axis, Nin, desired_p_frac, train_frac)
+			self.K_scheme = K_scheme
+			self.flow_scheme = flow_scheme
+			if self.flow_scheme=='None':
+				self.flow_scheme = 'unidir'  # apply pressure drop only in the regular directions - constrained node = positive, ground = 0
+		        	                         # there are 2 input and output pairs, exchange between them
+			self.net_typ = net_typ 
+			self.alpha = np.ones(Nin)*alpha                           
 		elif task_type == 'Allostery_one_pair':
 		    self.K_scheme = 'propto_current_squared'
 		    self.flow_scheme = 'one_shot'  # apply pressure drop from 1 output node and 1 output node, wait till convergence
@@ -130,15 +148,18 @@ class User_variables:
 				self.flow_scheme = 'unidir'  # apply pressure drop only in the regular directions - constrained node = positive, ground = 0
 		        	                         # there are 2 input and output pairs, exchange between them
 			self.net_typ = net_typ
+
 		# additional sizes given specific tasks
-		if self.task_type == 'XOR' or self.task_type == 'Counter' or self.task_type == 'Allostery_contrastive' or self.task_type == 'Regression_contrastive':
+		if (self.task_type == 'XOR' or self.task_type == 'Counter' or self.task_type == 'Allostery_contrastive' 
+			or self.task_type == 'Regression_contrastive' or self.task_type == 'dual_no_cell'):
 			self.output_nodes = output_nodes
-			if self.task_type == 'Allostery_contrastive' or self.task_type == 'Regression_contrastive':
-				if np.size(desired_p_frac)>len(output_nodes)*len(input_nodes_lst):
+			if self.task_type == 'Allostery_contrastive' or self.task_type == 'Regression_contrastive' or self.task_type == 'dual_no_cell':
+				if np.size(desired_p_frac)>len(output_nodes)*len(input_nodes_lst):  # fix size of desired_p_frac given # inputs
 					self.desired_p_frac = desired_p_frac[0]  # not in use for Regression, rather regression_target is used
 				else:
 					self.desired_p_frac = desired_p_frac  # not in use for Regression, rather regression_target is used
-				self.etta = etta
+				if flow_scheme!='dual':  # for all schemes that are not dual
+					self.etta = etta
 				self.mag_factor = mag_factor	
 			else:
 				self.mag_factor = 1.0
@@ -193,10 +214,13 @@ class User_variables:
 		p - float, pressure for all inlets
 		"""
 		self.input_p = p
-		if self.task_type == 'Allostery_contrastive':
+		# Allostery_contrastive gets desired_p here, Regression_constrastive and dual_no_cell get it in save_state_statistics
+		if self.task_type == 'Allostery_contrastive':  
 			self.desired_p = self.desired_p_frac * p
 		elif self.task_type == 'Regression_contrastive':
 			self.input_p = self.input_p * np.ones(2)
+		elif self.task_type == 'dual_no_cell':
+			self.input_p = self.input_p * np.ones(self.Nin)
 
 	def assign_K_min(self, K_min):
 		"""
@@ -233,9 +257,9 @@ class User_variables:
 		Strctr    - class, network structure
 		"""
 		if self.task_type=='Allostery_contrastive' or self.task_type=='Regression_contrastive':
-			u_thresh_noise = rand.normal(size=self.NGrid*4) * self.u_thresh_noise_mag
+			u_thresh_noise = rand.normal(size=Strctr.NE) * self.u_thresh_noise_mag  # for Cells NE=4*NGrid, for FC NE=Nin*Nout+Nin*1+Nout*1
 			u_thresh_updt = np.ones(Strctr.NE) 
-			u_thresh_updt[0:self.NGrid*4] = np.repeat(self.u_thresh, self.NGrid*4) + u_thresh_noise
+			u_thresh_updt[0:Strctr.NE] = np.repeat(self.u_thresh, self.NGrid*4) + u_thresh_noise
 			u_thresh_updt[u_thresh_updt<0] = 1;  # correct for if there is negative threshold, not physical
 		elif self.task_type == 'Memristor':
 			u_thresh_updt = np.ones(Strctr.NE)
@@ -275,7 +299,7 @@ class Net_structure:
 		Identify edges at connections of cells and at boundaries for ease of use. They will have zero gradient for p on them.
 
 		inputs:
-		NGrid - int, lattice dimension is Ngrid X Ngrid
+		BigClass - class instance including  user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
 
 		outputs:
 		EdgesTotal - 2D array sized [???, 2], all edges connecting cells in network
@@ -291,6 +315,12 @@ class Net_structure:
 			# right_side = [4*NGrid-2]  # right side is ground, other than topmost and bottommost cells, so no need to treat as boundary
 			# right_side = np.empty([], dtype=int)  # right side is ground, other than topmost and bottommost cells, so no need to treat as boundary
 			top_side = [4*NGrid-1]  # enumerate topmost edges in network
+		elif BigClass.Variabs.net_typ=='FC':  # no boundaries in fully-connected
+			NConnections=0  # no cells
+			left_side=[]
+			bottom_side=[]
+			right_side=[]
+			top_side=[]
 		else:  # N-by-N number of cells
 			NConnections = int(NGrid*(NGrid-1)*2)  # connections between cells
 			left_side = [0 + 4*NGrid*i for i in range(NGrid)]  # enumerate leftmost edges in network
@@ -311,7 +341,7 @@ class Net_structure:
 		Setup_constraints sets up the constraints on the network for specific run, in form of 2D arrays
 
 		inputs:
-		BigClass - class instance including the user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
+		BigClass - class instance including user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
 
 		outputs:
 		output_edges               - 1D array, all output edge numbers in flow scheme
@@ -368,8 +398,9 @@ class Net_structure:
 		Edges_full = copy.copy(self.EdgesTotal)
 
 		# output edges which are ground node but don't have to be in middle of cell
-		if BigClass.Variabs.task_type == 'Allostery_contrastive' or BigClass.Variabs.task_type == 'Regression_contrastive':  # for regression task in Nachi&Sam method, outputs are the output nodes. 
-																    														 # They are output only every 2nd iteration, from "Constraints.constaints_afo_task".
+		if (BigClass.Variabs.task_type == 'Allostery_contrastive' or BigClass.Variabs.task_type == 'Regression_contrastive'
+		    or BigClass.Variabs.task_type == 'dual_no_cell'):  # for regression task in Nachi&Sam method, outputs are the output nodes. 
+															   # They are output only every 2nd iteration, from "Constraints.constaints_afo_task".
 			self.output_edges = array([np.where(np.append(self.EI, self.EJ)==OutputNodes_full[i])[0] % len(self.EI) 
 		                               for i in range(len(OutputNodes_full))])
 			self.input_edges = array([np.where(np.append(self.EI, self.EJ)==InNodes_full[i])[0] % len(self.EI) 
@@ -391,10 +422,8 @@ class Net_structure:
 			self.OutputNodeData_full = array([])
 			self.OutputNodes_full = array([])
 		self.GroundNodes_full = GroundNodes_full
-		# self.GroundNodes_full_Allostery = GroundNodes_full_Allostery
 		self.EdgeData_full = EdgeData_full
 		self.Edges_full = Edges_full
-		# self.Edges_full_Allostery = Edges_full_Allostery
 
 
 class Net_state:
@@ -421,7 +450,7 @@ class Net_state:
 		initiateArrays initializes arrays used in flow_iterate()
 
 		inputs:
-		NGrid - int, lattice dimension is Ngrid X Ngrid
+		BigClass - class instance including user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
 		NE    - int, # edges
 		iters - int, # iterations allowed under flow cycles / updating conductivities
 
@@ -450,14 +479,14 @@ class Net_state:
 		Builds initial conductivity matrix, simulation steps and updates are under Solve.py
 
 		input:
-		Variabs   - class, user variables
-		Strctr    - class, network structure
+		BigClass  - class instance including user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
 		noise     - str, add noise to initial state of conductivities
 				    'no'     = all marbles in middle
 				    'rand_u' = take randomized flow field and move marbles accordingly
 				    'rand_K' = take randomized flow field, add to solved velocity field under all marbles in middle, 
 				               then move marbles accordingly
 		noise_amp - float, amplitude of noise, 0.0-1.0 generally
+		gpu       - boolean, whhether to use gpu calculation or not
 		
 		output:
 		K     - 1D array sized [NEdges] with initial conductivity values for every edge
@@ -491,28 +520,45 @@ class Net_state:
 		self.K_mat = np.eye(NE) * self.K  # save as matrix
 
 	def fixAllK(self, BigClass):
+		"""
+		fixAllK fixes conductivity of all cells and edges that connect to input or output nodes
+		so marbles will not obstruct flow at those cells. Actual update happens inside fixK
+
+		input:
+		BigClass - class instance including user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
+		
+		output:
+		K_mat - 2D cubic array sized [NEdges] with initial conductivity values on diagonal
+		"""
 		if BigClass.Variabs.task_type == 'Counter':  # for counter task, allow marble to get stuck at boundary edge (not input or output)
 			bc_nodes_full = [BigClass.Strctr.InNodes_full,  BigClass.Strctr.GroundNodes_full]
 		else:  # for all other tasks, no marbles to get stuck at boundary edge
 			bc_nodes_full = [BigClass.Strctr.InNodes_full, BigClass.Strctr.OutputNodes_full, BigClass.Strctr.GroundNodes_full]
-		for i in bc_nodes_full:
+		for i in bc_nodes_full:  # i is an np.array of nodes for each input / output cell
+			print('bc_node as in line 538 in Classes ', i)
 			self.fixK(BigClass, i)
 		self.K_mat = np.eye(BigClass.Strctr.NE) * self.K
 
 	def fixK(self, BigClass, nodes):
+		"""
+		fixK fixes conductivity of cells and edges that connect to input or output nodes
+		so marbles will not obstruct flow at those cells
+
+		input:
+		BigClass - class instance including user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
+		nodes    - np.array sized [???], nodes at of input or output cell, given in fixAllK()
+		"""
 		length = len(nodes)
 		for n in nodes.reshape(length):
 			# self.K[BigClass.Strctr.EJ == n] = BigClass.Variabs.K_max
-			self.K[BigClass.Strctr.EJ == n] = self.K_backg[BigClass.Strctr.EJ == n]
+			self.K[BigClass.Strctr.EJ == n] = self.K_backg[BigClass.Strctr.EJ == n]  # use background K for if K non-uniform
 
 	def solve_flow_const_K(self, BigClass, u, Cstr, f, iters_same_BCs):
 		"""
 		solve_flow_const_K solves the flow under given conductance configuration without changing Ks, until simulation converges
 
 		inputs:
-		K_max          - float, maximal conductance value
-		NE             - int, # edges
-		EI             - array, node number on 1st side of all edges
+		BigClass       - class instance including user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
 		u              - 1D array sized [NE + constraints, ], flow field at edges from previous solution iteration
 		Cstr           - 2D array without last column, which is f from Rocks & Katifori 2018 https://www.pnas.org/cgi/doi/10.1073/pnas.1806790116
 		f              - constraint vector (from Rocks and Katifori 2018)
@@ -558,7 +604,7 @@ class Net_state:
 		uses solve_flow_const_K()
 
 		inputs:
-		BigClass -       class instance including the user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
+		BigClass -       class instance including user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
 				         I will not go into everything used from there to save space here.
 	    u              - 1D array sized [NE + constraints, ], flow at each edge at beginning of iteration
         Cstr           - 2D array without last column (which is f from Rocks and Katifori 2018)
@@ -573,11 +619,8 @@ class Net_state:
 
 		for l in range(iters_same_BCs):  # l>0 since the balls move, change K matrix which changes flow.
 										 # flow then changes K so need to iterate over l>0.
-			# print('Iteration # ', l, 'under the same BC')
 			if BigClass.Variabs.K_type == 'flow_dep':  # update conductivities proportional to flow, no marbles, this is unphysical		
 				p, u_nxt = self.solve_flow_const_K(BigClass, u, Cstr, f, iters_same_BCs)
-				# print('calculated u, %d edges contain different values than before' % np.size(np.where(u_nxt-u)))
-				# p, u_nxt = BigClass.Solver.solve.solve_flow_const_K(self.K, BigClass, u, Cstr, f, iters_same_BCs)
 			else:    # update conductivities due to movement of marbles
 				L, L_bar = Matrixfuncs.buildL(BigClass, BigClass.Strctr.DM, self.K_mat, Cstr, BigClass.Strctr.NN)  # Lagrangian
 				p, u_nxt = BigClass.Solver.solve.Solve_flow(L_bar, BigClass.Strctr.EI, BigClass.Strctr.EJ, self.K, f)  # pressure and flow
@@ -587,7 +630,6 @@ class Net_state:
 				K_nxt = Matrixfuncs.ChangeKFromFlow(u_nxt, BigClass.Variabs.u_thresh, self.K, self.K_backg, BigClass.Variabs.NGrid, 
 													K_change_scheme=BigClass.Variabs.K_scheme, allowed_cells=BigClass.Variabs.allowed_cells, 
 													K_max=BigClass.Variabs.K_max, K_min=BigClass.Variabs.K_min, beta=BigClass.Variabs.beta)
-				# print('calculated K, %d edges contain different values than before' % np.size(np.where(K_nxt-self.K)))
 				self.K_mat = np.eye(BigClass.Strctr.NE) * K_nxt
 				K_old = copy.copy(self.K)
 				self.K = copy.copy(K_nxt)
@@ -614,17 +656,19 @@ class Net_state:
 		Optionally plots the network as a networkx graph
 
 		input:
-		BigClass - class instance including the user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
+		BigClass - class instance including user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
 				   I will not go into everything used from there to save space here.
-		sim_type - simulation type: 'no marbles'     - flows from 1 input at a time and all outputs, all edges have high State.K
-		                            'allostery test' - flows from 1 input at a time and all outputs, K's as in State.K
-		                            'w marbles'      - (default) flows from 1 input and one output K's as in State.K, 
-		                                               update conductivities as due to flow u and calculate flow again so
-		                                               further update of conductivities will not change a thing
-		plot     - flag: 'no'   - do not plot anything
-		                 'yes'  - plot every iteration in Variabs.iterations
-		                 'last' - only last couple of steps, one for each input
-		                 'test' - only at iteration steps that have i%2==0
+		sim_type - simulation type: 
+		           'no marbles'     - flows from 1 input at a time and all outputs, all edges have high State.K
+		           'allostery test' - flows from 1 input at a time and all outputs, K's as in State.K
+		           'w marbles'      - (default) flows from 1 input and one output K's as in State.K, 
+		                              update conductivities as due to flow u and calculate flow again so
+		                              further update of conductivities will not change a thing
+		plot     - flag: 
+		           'no'   - do not plot anything
+		           'yes'  - plot every iteration in Variabs.iterations
+		           'last' - only last couple of steps, one for each input
+		           'test' - only at iteration steps that have i%2==0
 		save_fig - str, 'yes' saves the figure plotted as png, 'no' doesn't. default='no'
 
 		output:
@@ -645,29 +689,9 @@ class Net_state:
 		# print('BigClass.Strctr.OutputNodes_full', BigClass.Strctr.OutputNodes_full)
 		# print('BigClass.Strctr.OutputNodeData_full', BigClass.Strctr.OutputNodeData_full)
 
-		if BigClass.Variabs.task_type == 'Regression_contrastive' or BigClass.Variabs.task_type == 'Allostery_contrastive':
-			if BigClass.Variabs.flow_scheme == 'dual':
-				self.ratio_vec = np.zeros([int(np.ceil(BigClass.Variabs.iterations/2)), 2])  # ratio criterion, like an error
-				if BigClass.Variabs.task_type == 'Allostery_contrastive':  # 1 input 2 outputs
-					self.error_vec = np.zeros([int(np.ceil(BigClass.Variabs.iterations/2)), 2])  # error of desired vs. measured output pressure
-					self.p_dual_vec = np.zeros(int(np.ceil(BigClass.Variabs.iterations/2)))  # pressure at input, in time, for the dual problem during training
-					self.outputs_dual_vec = np.zeros([int(np.ceil(BigClass.Variabs.iterations/2)), 2])  # pressure at outputs,in time, for the dual problem during training
-					self.p_vec = np.zeros(int(np.ceil(BigClass.Variabs.iterations/2)))  # pressure at input in time, for the dual problem during test
-					self.outputs_vec = np.zeros([int(np.ceil(BigClass.Variabs.iterations/2)), 2])  # pressure at outputs,in time, for the dual problem during test
-					self.p_nudge = np.ones(1)  # the nudged pressure at input at time 0 is p_in
-					self.outputs_dual = np.ones(2)*0.5  # the nudged pressure at output at time 0 is assumed to be 0.5*p_in
-				elif BigClass.Variabs.task_type == 'Regression_contrastive':  # 2 inputs 1 output
-					self.error_vec = np.zeros(int(np.ceil(BigClass.Variabs.iterations/2)))  # error of desired vs. measured output pressure
-					self.p_dual_vec = np.zeros([int(np.ceil(BigClass.Variabs.iterations/2)), 2])  # ratio between the two pressure outputs
-					self.outputs_dual_vec = np.zeros(int(np.ceil(BigClass.Variabs.iterations/2)))  # ratio between the two pressure outputs
-					self.p_vec = np.zeros([int(np.ceil(BigClass.Variabs.iterations/2)), 2])  # ratio between the two pressure outputs
-					self.outputs_vec = np.zeros(int(np.ceil(BigClass.Variabs.iterations/2)))  # ratio between the two pressure outputs
-					self.p_nudge = np.ones(2)
-					self.outputs_dual = np.ones(1)*0.5
-			else:
-				self.error_vec = np.zeros(int(np.ceil(BigClass.Variabs.iterations/2)))  # error of desired vs. measured output pressure
-				self.ratio_vec = np.zeros(int(np.ceil(BigClass.Variabs.iterations/2)))  # ratio between the two pressure outputs
-			self.u_final_vec = np.zeros([int(np.ceil(BigClass.Variabs.iterations)), 2])  # ratio between the two pressure outputs
+		if (BigClass.Variabs.task_type == 'Regression_contrastive' or BigClass.Variabs.task_type == 'Allostery_contrastive'
+			or BigClass.Variabs.task_type == 'dual_no_cell'):
+			self.initialize_vecs(BigClass.Variabs.task_type, BigClass.Variabs.flow_scheme)
 
 		# Determine # iterations
 		iters, iters_same_BCs = self.num_iterations(BigClass, sim_type)
@@ -681,8 +705,7 @@ class Net_state:
 			print('cycle # %d' %cycle)
 			
 			# if regression task, pull a sample from training set
-			if BigClass.Variabs.task_type == 'Regression_contrastive':
-				# cycle=0
+			if BigClass.Variabs.task_type == 'Regression_contrastive' or BigClass.Variabs.task_type == 'dual_no_cell':
 				train_sample = BigClass.Variabs.train_data[cycle]
 				print('train_sample ', train_sample, ' train_target ', BigClass.Variabs.train_target[cycle])
 			else:  # no training set needed
@@ -691,11 +714,11 @@ class Net_state:
 			# specific constraints for training step	
 			NodeData, Nodes, EdgeData, Edges, GroundNodes = Constraints.Constraints_afo_task(BigClass.Variabs, BigClass.Strctr, self, sim_type, i, train_sample)
 
-			# print('NodeData', NodeData)
-			# print('Nodes', Nodes)
-			# print('EdgeData', EdgeData)
-			# print('Edges', Edges)
-			# print('GroundNodes',  GroundNodes)
+			print('NodeData', NodeData)
+			print('Nodes', Nodes)
+			print('EdgeData', EdgeData)
+			print('Edges', Edges)
+			print('GroundNodes',  GroundNodes)
 
 			# BC and constraints as matrix
 			Cstr_full, Cstr, f = Constraints.ConstraintMatrix(NodeData, Nodes, EdgeData, Edges, GroundNodes, 
@@ -717,10 +740,6 @@ class Net_state:
 			if plot == 'yes' or (plot == 'last' and (i == (iters - 1) or i == (iters - 2))) or (plot == 'test' and i%2==0):	
 				NETfuncs.PlotNetwork(self.p, self.u, self.K, BigClass, EIEJ_plots, NN, NE, 
 									nodes='no', edges='yes', pressureSurf='yes', savefig=savefig)
-				# NETfuncs.PlotNetwork(self.p, self.u, self.K, BigClass, EIEJ_plots, NN, NE, 
-				# 					nodes='no', edges='yes', pressureSurf='no', savefig=savefig)
-				# NETfuncs.PlotNetwork(self.p, self.u, self.K, BigClass, EIEJ_plots, NN, NE, 
-				# 					nodes='yes', edges='no', pressureSurf='no', savefig=savefig)
 				plt.show()
 
 			# plot if convergence reached before iters # of iterations
@@ -751,9 +770,9 @@ class Net_state:
 		num_iterations determines maximal # iterations in total flow scheme (iters) and in same boundary conditions (BCs)
 
 		inputs:
-		task_type - str, task that is being simulated, see User_variables() class for descrip.
-		K_type    - str, effect of flow on conductivity without changing marble positions, see User_variables() class for descrip.
-		sim_type  - str, simulation type, see flow_iterate() function for descrip.
+		BigClass - class instance including user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
+				   I will not go into everything used from there to save space here.
+		sim_type - str, simulation type, see flow_iterate() function for descrip.
 
 		outputs:
 		iters          - int, maximal # iterations in total flow scheme
@@ -858,6 +877,40 @@ class Net_state:
 				self.MSE[i-cyc_len] = MSE_i
 				self.Hamming[i-cyc_len] = Hamming_i
 
+	def initialize_vecs(self, task_type, flow_scheme):
+		half_iters = int(np.ceil(BigClass.Variabs.iterations/2))
+		if flow_scheme == 'dual':
+			self.ratio_vec = np.zeros([half_iters, 2])  # ratio criterion, like an error
+			if task_type == 'Allostery_contrastive':  # 1 input 2 outputs
+				self.error_vec = np.zeros([half_iters, 2])  # error of desired vs. measured output pressure
+				self.p_dual_vec = np.zeros(half_iters)  # pressure at input, in time, for the dual problem during training
+				self.outputs_dual_vec = np.zeros([half_iters, 2])  # pressure at outputs,in time, for the dual problem during training
+				self.p_vec = np.zeros(half_iters)  # pressure at input in time, for the dual problem during test
+				self.outputs_vec = np.zeros([half_iters, 2])  # pressure at outputs,in time, for the dual problem during test
+				self.p_nudge = np.ones(1)  # the nudged pressure at input at time 0 is p_in
+				self.outputs_dual = np.ones(2)*0.5  # the nudged pressure at output at time 0 is assumed to be 0.5*p_in
+			# 2 inputs 1 output for Regression_contrastive, self.Nin inputs self.Nout outputs for 'dual_no_cel'
+			elif BigClass.Variabs.task_type == 'Regression_contrastive':
+				self.error_vec = np.zeros(half_iters)  # error of desired vs. measured output pressure
+				self.p_dual_vec = np.zeros([half_iters, 2])  # dual values for pressure inputs, i.e. when Ks change
+				self.outputs_dual_vec = np.zeros(half_iters)  # ratio between the two pressure outputs
+				self.p_vec = np.zeros([half_iters, 2])  # ratio between the two pressure outputs
+				self.outputs_vec = np.zeros(half_iters)  # ratio between the two pressure outputs
+				self.p_nudge = np.ones(2)  # the nudged pressure at input at time 0 is p_in
+				self.outputs_dual = np.ones(1)*0.5  # the nudged pressure at output at time 0 is assumed to be 0.5*p_in
+			elif BigClass.Variabs.task_type == 'dual_no_cell':
+				self.error_vec = np.zeros([half_iters, BigClass.Variabs.Nout])  # error of desired vs. measured output pressure
+				self.p_dual_vec = np.zeros([half_iters, BigClass.Variabs.Nin])  # dual values for pressure inputs, i.e. when Ks change
+				self.outputs_dual_vec = np.zeros([half_iters, BigClass.Variabs.Nout])  # ratio between the two pressure outputs
+				self.p_vec = np.zeros([half_iters, BigClass.Variabs.Nin])  # pressure inputs during measurement
+				self.outputs_vec = np.zeros([half_iters, BigClass.Variabs.Nout])  # pressure outputs during measurement
+				self.p_nudge = np.ones(BigClass.Variabs.Nin)  # the nudged pressure at input at time 0 is p_in
+				self.outputs_dual = np.ones(BigClass.Variabs.Nout)*0.5  # the nudged pressure at output at time 0 is assumed to be 0.5*p_in
+		else:
+			self.error_vec = np.zeros(half_iters)  # error of desired vs. measured output pressure
+			self.ratio_vec = np.zeros(half_iters)  # ratio between the two pressure outputs
+		self.u_final_vec = np.zeros([int(np.ceil(BigClass.Variabs.iterations)), 2])  # u_final at every iteration (and not every 2nd iteration)
+
 
 class Solver:
     def __init__(self, use_gpu=False):
@@ -883,17 +936,14 @@ class Networkx_net:
 
 	def buildNetwork(self, BigClass):
 		"""
-
 	    Builds a networkx network using edges from EIEJ_plots which are built upon EI and EJ at "Matrixfuncs.py"
 	    After this step, the order of edges at EIEJ_plots and in the networkx net is not the same which is shit
 	    
-	    input:
-
+	    inputs:
 	    EIEJ_plots - 2D array sized [NE, 2] - 
 	                 EIEJ_plots[i,0] and EIEJ_plots[i,1] are input and output nodes to edge i, respectively
 	    
-	    output:
-
+	    outputs:
 	    NET - networkx network containing just the edges from EIEJ_plots
 	    """
 
@@ -907,9 +957,7 @@ class Networkx_net:
 		build_pos_lattice builds the lattice of positions of edges and nodes
 
 		inputs:
-		net_typ - str, layout for NETfuncs plotNetStructure(). 
-	              'Cells' is Roie's style of network and is default
-	              'Nachi' is Nachi style
+		BigClass - class instance including the user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
 
 	    outputs:
 	    pos_lattice - dict, positions of nodes from NET.nodes

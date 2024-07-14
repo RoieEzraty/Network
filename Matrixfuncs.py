@@ -1,6 +1,8 @@
 import numpy as np
 import numpy.random as rand
 import copy
+import itertools
+import DatasetManipulations
 from numpy import array as array
 from numpy import arange as arange
 from numpy import zeros as zeros
@@ -12,10 +14,12 @@ def buildL(BigClass, DM, K_mat, Cstr, NN):
     np.array cubic array sized [NNodes + Constraints]
 
     input:
-    DM    - Incidence matrix np.array [NE, NN]
-    K_mat - cubic np.array sized NE with flow conductivities on diagonal
-    Cstr  - np.array sized [Constraints, NN + 1] of constraints 
-    NN    - NNodes, ind
+    BigClass - class instance including the user variables (Variabs), network structure (Strctr) and networkx (NET) and network state (State) class instances
+               I will not go into everything used from there to save space here.
+    DM       - Incidence matrix np.array [NE, NN]
+    K_mat    - cubic np.array sized NE with flow conductivities on diagonal
+    Cstr     - np.array sized [Constraints, NN + 1] of constraints 
+    NN       - NNodes, ind
 
     output:
     L     - Shortened Lagrangian np.array cubic array sized [NNodes]
@@ -47,7 +51,6 @@ def build_incidence(Variabs):
     NE         - NEdges, int
     NN         - NNodes, int
     """
-
     a = Variabs.NGrid
     b = Variabs.NGrid
     typ = Variabs.net_typ
@@ -118,7 +121,7 @@ def build_incidence(Variabs):
                 EJ.append((b-1)*a + j + 1)
         NE0 = len(EI)
                 
-        # if Variabs.Periodic==True:
+        # if Variabs.Periodic==True:  # This one always returns true for some reason
         #     print('Periodic True')
         #     for j in range(a):
         #         EI.append(j)
@@ -132,7 +135,8 @@ def build_incidence(Variabs):
 
     elif typ == 'FC':
 
-        Nground = len(Variabs.input_nodes_lst) + len(Variabs.output_nodes) - 1
+        NN = len(Variabs.input_nodes_lst) + len(Variabs.output_nodes) + 1
+        ground_node = copy.copy(NN) - 1
         EI = []
         EJ = []
 
@@ -145,12 +149,12 @@ def build_incidence(Variabs):
         # connect input to ground
         for i, inNode in enumerate(Variabs.input_nodes_lst):
             EI.append(inNode)
-            EJ.append(Nground)
+            EJ.append(ground_node)
 
         # connect output to ground
         for i, outNode in enumerate(Variabs.output_nodes):
             EI.append(outNode)
-            EJ.append(Nground)
+            EJ.append(ground_node)
                 
     EI = array(EI)
     EJ = array(EJ)
@@ -182,10 +186,6 @@ def build_incidence(Variabs):
             
     # for plots
     EIEJ_plots = [(EI[i], EJ[i]) for i in range(len(EI))]
-
-    print('EI after', EI)
-    print('EJ after', EJ)
-    print('NE after', NE)
     
     DM = zeros([NE, NN])  # Incidence matrix
     for i in range(NE):
@@ -245,6 +245,7 @@ def ChangeKFromFlow(u, thresh, K, K_backg, NGrid, K_change_scheme='marbles_press
                 K_nxt[4*i:4*(i+1)] = K_sub_nxt  # put them in the right place at K_nxt
     return K_nxt
 
+
 def ChangeKFromFlow_singleCell(u, thresh, K, K_backg, K_max, K_min, K_change_scheme):
     """
     Change conductivities of cell as a 2D cubic np.array sized 4
@@ -294,6 +295,7 @@ def ChangeKFromFlow_singleCell(u, thresh, K, K_backg, K_max, K_min, K_change_sch
             K_nxt = copy.copy(K)
     return K_nxt
 
+
 def K_by_cells(K, K_min, NGrid):
     """
     K_by_cells find location of marble at each cell
@@ -315,3 +317,29 @@ def K_by_cells(K, K_min, NGrid):
         else:
             K_cells[i] = marble_place + 1
     return K_cells
+
+
+def create_regression_dataset(data_size_each_input, Nin, desired_p_frac, train_frac):
+    """
+    create_regression_dataset creates np.arrays that represent the input pressures (regression_data) and their desired output pressures
+    (regression_target) for regression task with number of samples data_size_each_axis**Nin
+
+    inputs:
+    data_size_each_input - int, # of pressures in each input channel to sample from, ranging 0-1
+    Nin                  - int, # of input nodes
+    desred_p_frac        - np.array sizes [Nout, Nin] corresponding to regression coefficient matrix of the task, i.e. x = M p_in
+    train_frac           - float ranging 0-1, fraction of datapoints out of data_size_each_axis**Nin data points used to train,
+                           the rest are for test
+
+    outputs:
+    train_data   - np.array sized [data_size_each_axis**Nin*train_frac, Nin], all possible pressure input combinations,
+                   i.e. 0-1 in each input, for train set only
+    train_target - np.array sized [data_size_each_axis**Nin*train_frac, Nout], the output pressure of train_data, i.e. = M p_in
+    test_data    - same as train_data but for test
+    test_target  - same as train_target but for test
+    """
+    print('creating dataset using specific function')
+    regression_data = np.array(list(itertools.product(range(1, data_size_each_input + 1), repeat=Nin)))/data_size_each_input
+    regression_target = np.matmul(regression_data, desired_p_frac)
+    train_data, train_target, test_data, test_target = DatasetManipulations.divide_train_test(regression_data, regression_target, train_frac)
+    return train_data, train_target, test_data, test_target
